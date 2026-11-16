@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -135,6 +136,26 @@ class SingleCase(unittest.TestCase):
         self.assertIn(mid, wake.read_text(encoding="utf-8"))
         second = run(["watch", "--once"], self.tmp)
         self.assertEqual(second.returncode, 3)
+
+    def test_presence_online_offline(self):
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        try:
+            sessions = self.tmp / ".aw" / "sessions"
+            sessions.mkdir(parents=True, exist_ok=True)
+            (sessions / "ba-9.json").write_text(json.dumps({
+                "agent_id": "ba-9", "role": "ba", "session_id": "s-9",
+                "pid": proc.pid, "host": "test", "last_seen": "2026-11-16T00:00:00+00:00",
+            }), encoding="utf-8")
+            online = run(["presence", "--json"], self.tmp)
+            data = json.loads(online.stdout)
+            self.assertEqual(data[0]["status"], "online")
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+        time.sleep(0.3)
+        offline = run(["presence", "--json"], self.tmp)
+        data = json.loads(offline.stdout)
+        self.assertEqual(data[0]["status"], "offline")
 
     def test_watch_ensure_start_stop(self):
         started = run(["watch", "--ensure", "--interval", "1"], self.tmp)

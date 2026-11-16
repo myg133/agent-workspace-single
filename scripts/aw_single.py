@@ -197,6 +197,8 @@ def _record_session(root: Path, ident: dict) -> None:
         "started_at": old.get("started_at") or _now(),
         "last_seen": _now(),
         "pid": os.getpid(),
+        "pid_started_at": _process_start(os.getpid()),
+        "role": os.environ.get("AW_ROLE", ""),
         "host": os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", ""),
     })
 
@@ -412,6 +414,133 @@ def _claim_doctor(root: Path, cfg: dict) -> int:
         print(item)
     return 1
 
+
+
+def _process_start(pid: int) -> str:
+    """返回进程创建时间（ISO 8601），用于识别 PID 复用；取不到返回空。"""
+    if not pid or pid <= 0:
+        return ""
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class FILETIME(ctypes.Structure):
+                _fields_ = [("dwLowDateTime", wintypes.DWORD),
+                            ("dwHighDateTime", wintypes.DWORD)]
+
+            handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
+            if not handle:
+                return ""
+            try:
+                created = FILETIME()
+                exit_t = FILETIME()
+                kernel = FILETIME()
+                user = FILETIME()
+                ok = ctypes.windll.kernel32.GetProcessTimes(
+                    handle, ctypes.byref(created), ctypes.byref(exit_t),
+                    ctypes.byref(kernel), ctypes.byref(user))
+                if not ok:
+                    return ""
+                ticks = (created.dwHighDateTime << 32) | created.dwLowDateTime
+                seconds = (ticks - 116444736000000000) / 10_000_000
+                return _dt.datetime.fromtimestamp(seconds, _dt.timezone.utc).isoformat(timespec="seconds")
+            finally:
+                ctypes.windll.kernel32.CloseHandle(handle)
+        except Exception:
+            return ""
+    try:
+        stat = Path("/proc/%d/stat" % pid).read_text(encoding="utf-8")
+        parts = stat.split()
+        start_ticks = int(parts[21])
+        btime = None
+        for line in Path("/proc/stat").read_text(encoding="utf-8").splitlines():
+            if line.startswith("btime "):
+                btime = int(line.split()[1])
+                break
+        if btime is None:
+            return ""
+        hz = os.sysconf(os.sysconf_names.get("SC_CLK_TCK", "SC_CLK_TCK"))
+        seconds = btime + start_ticks / float(hz)
+        return _dt.datetime.fromtimestamp(seconds, _dt.timezone.utc).isoformat(timespec="seconds")
+    except (OSError, ValueError, IndexError):
+        return ""
+
+
+def _same_start(a: str, b: str, tolerance: int = 5) -> bool:
+    if not a or not b:
+        return True
+    try:
+        ta = _dt.datetime.fromisoformat(a.replace("Z", "+00:00"))
+        tb = _dt.datetime.fromisoformat(b.replace("Z", "+00:00"))
+        return abs((ta - tb).total_seconds()) <= tolerance
+    except ValueError:
+        return True
+
+
+def _presence_path(root: Path, agent: str) -> Path:
+    return root / STATE_DIR / "presence" / ("%s.json" % agent)
+
+
+def _session_alive(record: dict) -> bool:
+    pid = int(record.get("pid") or 0)
+    if not _pid_alive(pid):
+        return False
+    recorded = str(record.get("pid_started_at") or "")
+    actual = _process_start(pid)
+    if recorded and actual and not _same_start(recorded, actual):
+        return False
+    return True
+
+
+def _update_presence(root: Path) -> None:
+    folder = root / STATE_DIR / "sessions"
+    if not folder.is_dir():
+        return
+    for path in folder.glob("*.json"):
+        record = read_json(path, None)
+        if not isinstance(record, dict) or not record.get("agent_id"):
+            continue
+        agent = str(record["agent_id"])
+        alive = _session_alive(record)
+        prev = read_json(_presence_path(root, agent), {})
+        status = "online" if alive else "offline"
+        if prev.get("status") == status and not alive:
+            continue
+        write_json(_presence_path(root, agent), {
+            "agent": agent,
+            "role": record.get("role", ""),
+            "status": status,
+            "session": record.get("session_id", ""),
+            "host": record.get("host", ""),
+            "pid": record.get("pid", 0),
+            "pid_started_at": record.get("pid_started_at", ""),
+            "last_seen": record.get("last_seen", ""),
+            "updated_at": _now(),
+            "ttl_s": 90,
+        })
+
+
+def cmd_presence(args) -> int:
+    root, _cfg = load_config(args)
+    _update_presence(root)
+    folder = root / STATE_DIR / "presence"
+    rows = []
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        data = read_json(path, None)
+        if isinstance(data, dict):
+            rows.append(data)
+    if args.json:
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return 0
+    if not rows:
+        print("（无 presence）")
+        return 0
+    for row in rows:
+        print("%s\t%s\t%s\tpid=%s\t%s" % (
+            row.get("agent", ""), row.get("role", ""), row.get("status", ""),
+            row.get("pid", ""), row.get("updated_at", "")))
+    return 0
 
 def cmd_init(args) -> int:
     root = Path(args.root).expanduser().resolve()
@@ -784,6 +913,7 @@ def _watch_stop(root: Path) -> int:
 
 
 def _run_watch_once(root: Path, args, seed_read: bool = False) -> int:
+    _update_presence(root)
     events = _scan_wake(root, seed_read=seed_read)
     if args.json:
         for event in events:
@@ -920,6 +1050,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_m.add_argument("--timeout", type=int, default=120)
     p_m.add_argument("--json", action="store_true")
     p_m.set_defaults(func=cmd_msg)
+
+    p_presence = sub.add_parser("presence", help="查看本地 agent 在线状态")
+    p_presence.add_argument("--json", action="store_true")
+    p_presence.set_defaults(func=cmd_presence)
 
     p_w = sub.add_parser("watch", help="本地消息唤醒")
     p_w.add_argument("--once", action="store_true")

@@ -42,8 +42,32 @@ export default function (pi) {
   }
   const wakePath = join(root, '.aw', 'wake', agent + '.json')
   const seenPath = join(root, '.aw', 'omp-wake-seen', agent + '.json')
+  const sessionPath = join(root, '.aw', 'sessions', agent + '.json')
   const seen = new Set()
   let lastWakeAt = 0
+
+  function writeSession(pid) {
+    try {
+      mkdirSync(dirname(sessionPath), { recursive: true })
+      const now = new Date().toISOString()
+      const record = {
+        agent_id: agent,
+        role: String(process.env.AW_ROLE || '').trim(),
+        session_id: String(process.env.AW_SESSION_ID || '').trim() || ('proc-' + process.pid),
+        pid: Number(pid || 0),
+        pid_started_at: pid ? new Date(Date.now() - process.uptime() * 1000).toISOString() : '',
+        host: String(process.env.COMPUTERNAME || process.env.HOSTNAME || ''),
+        last_seen: now,
+      }
+      writeFileSync(sessionPath, JSON.stringify(record, null, 2))
+    } catch (error) {
+      note('session-error ' + String(error))
+    }
+  }
+
+  writeSession(process.pid)
+  const sessionTimer = setInterval(() => writeSession(process.pid), 30000)
+  process.on?.('exit', () => writeSession(0))
 
   const initial = readJson(seenPath)
   if (Array.isArray(initial?.ids)) {
@@ -96,7 +120,9 @@ export default function (pi) {
 
   const timer = setInterval(tick, POLL_MS)
   note('loaded agent=' + agent + ' root=' + root)
+  // sessionTimer 由 event loop 持有；不要 unref，否则插件进程可能提前退出。
   pi.on?.('session_start', () => tick())
   // 保留 timer 引用，避免打包器/宿主把 interval 清掉。
   void timer
+  void sessionTimer
 }

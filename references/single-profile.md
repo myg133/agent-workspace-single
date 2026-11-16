@@ -181,6 +181,8 @@ aw_single.py msg wait [--timeout 120] [--consume]
 
 aw_single.py watch [--once] [--ensure] [--status] [--stop] \
   [--interval 5] [--exec "<command>"] [--json]
+
+aw_single.py presence [--json]
 ```
 
 ### 9.1 本地消息

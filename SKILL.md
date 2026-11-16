@@ -45,6 +45,7 @@ MQTT 库已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要安装依�
 
 先读：
 
+- `references/setup.md`
 - `references/single-profile.md`
 - `references/workflow.md`
 - `references/layout.md`

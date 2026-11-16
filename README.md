@@ -11,7 +11,22 @@
 
 ## 状态
 
-当前是 **设计骨架**，还没有 `aw_single.py` 实现。
+MVP 已实现：`scripts/aw_single.py`。
+
+```bash
+python scripts/aw_single.py init --root . \
+  --code-root D:/proj/app --docs-root D:/proj/docs --base-branch develop
+
+python scripts/aw_single.py whoami
+python scripts/aw_single.py queue add REQ-001 --title "登录"
+python scripts/aw_single.py claim next
+python scripts/aw_single.py claim list
+python scripts/aw_single.py claim release REQ-001
+python scripts/aw_single.py claim doctor
+```
+
+当前只覆盖：本地 claim、WIP=1、feature worktree、queue、doctor。
+不解析 docs 状态、不接 CI、不做消息。
 
 ## 目录
 

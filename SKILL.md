@@ -39,8 +39,21 @@ metadata:
 
 ## 入口
 
-设计阶段先读：
+先读：
 
 - `references/single-profile.md`
 - `references/workflow.md`
 - `references/layout.md`
+
+命令：
+
+```bash
+python scripts/aw_single.py init --root . \
+  --code-root <code-root> --docs-root <docs-root> --base-branch develop
+python scripts/aw_single.py whoami
+python scripts/aw_single.py queue add REQ-001
+python scripts/aw_single.py claim next
+python scripts/aw_single.py claim list
+python scripts/aw_single.py claim release REQ-001
+python scripts/aw_single.py claim doctor
+```

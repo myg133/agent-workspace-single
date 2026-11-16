@@ -42,9 +42,34 @@
   "demand_dir": "demands",
   "project_id": "p-9f8e7d6c5b4a",
   "project_alias": "github.com/myg133/agent-workspace-single",
-  "project_source": "git:origin"
+  "project_source": "git:origin",
+  "mqtt": {
+    "enabled": true,
+    "host": "broker.example.com",
+    "port": 8883,
+    "tls": true,
+    "ca_file": "",
+    "username": "",
+    "password_env": "AW_MQTT_PASSWORD",
+    "client_id": "",
+    "keepalive": 30,
+    "topic_prefix": "aw/v1"
+  }
 }
 ```
+
+MQTT 字段：
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `enabled` | 是 | `false` = 仅本地，不连 broker |
+| `host` / `port` | 是 | broker 地址；TLS 常用 8883 |
+| `tls` | 是 | 生产必须 `true` |
+| `ca_file` | 否 | 自签 CA 的路径；为空用系统 CA |
+| `username` | 否 | broker 用户名 |
+| `password_env` | 否 | 密码环境变量名，默认 `AW_MQTT_PASSWORD` |
+| `client_id` | 否 | 为空时由 watcher 生成；同一 broker 必须唯一 |
+| `topic_prefix` | 否 | 默认 `aw/v1` |
 
 字段：
 

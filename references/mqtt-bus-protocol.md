@@ -45,6 +45,51 @@ aw_single.py project alias
 aw_single.py project check
 ```
 
+## 1.2 Broker 配置
+
+用户必须在 `.aw/config.json` 的 `mqtt` 段指定 broker；不配置就是仅本地模式：
+
+```json
+{
+  "mqtt": {
+    "enabled": true,
+    "host": "broker.example.com",
+    "port": 8883,
+    "tls": true,
+    "ca_file": "",
+    "username": "",
+    "password_env": "AW_MQTT_PASSWORD",
+    "client_id": "",
+    "keepalive": 30,
+    "topic_prefix": "aw/v1"
+  }
+}
+```
+
+也可以用 `aw_single.py init` 参数写入：
+
+```bash
+aw_single.py init --root . \
+  --code-root D:/proj/app --docs-root D:/proj/docs \
+  --base-branch develop \
+  --mqtt-host broker.example.com --mqtt-port 8883 \
+  --mqtt-username aw --mqtt-ca D:/certs/ca.pem
+```
+
+密码不要写配置文件；用环境变量：
+
+```bash
+export AW_MQTT_PASSWORD='...'
+```
+
+规则：
+
+- 没有 `mqtt.host` / `enabled=false` → 仅本地，不连接；
+- `tls=false` 只用于本地测试；
+- `client_id` 为空时由 watcher 生成；同一 broker 下必须唯一；
+- `ca_file` 支持自签 CA；
+- 配置只在本地 `.aw/config.json`，不提交。
+
 ## 2. Bus 分支
 
 位置：**代码仓库**的 orphan 分支 `refs/heads/bus`。

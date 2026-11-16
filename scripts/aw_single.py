@@ -671,6 +671,20 @@ def cmd_init(args) -> int:
         worktree_root = (root / "worktrees").resolve()
     worktree_root.mkdir(parents=True, exist_ok=True)
     project = _project_identity(code)
+    mqtt = {"enabled": False}
+    if args.mqtt_host.strip():
+        mqtt = {
+            "enabled": True,
+            "host": args.mqtt_host.strip(),
+            "port": args.mqtt_port,
+            "tls": not args.mqtt_no_tls,
+            "ca_file": args.mqtt_ca.strip(),
+            "username": args.mqtt_username.strip(),
+            "password_env": "AW_MQTT_PASSWORD",
+            "client_id": args.mqtt_client_id.strip(),
+            "keepalive": 30,
+            "topic_prefix": "aw/v1",
+        }
     config = {
         "profile": "single",
         "version": 1,
@@ -683,6 +697,7 @@ def cmd_init(args) -> int:
         "worktree_root": str(worktree_root),
         "branch_prefix": args.branch_prefix,
         "demand_dir": args.demand_dir,
+        "mqtt": mqtt,
     }
     write_json(state / "config.json", config)
     if not (state / "queue.json").exists():
@@ -1123,6 +1138,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--worktree-root", default=None)
     p_init.add_argument("--branch-prefix", default="feature/")
     p_init.add_argument("--demand-dir", default="demands")
+    p_init.add_argument("--mqtt-host", default="", help="MQTT broker 主机；省略=仅本地")
+    p_init.add_argument("--mqtt-port", type=int, default=8883)
+    p_init.add_argument("--mqtt-no-tls", action="store_true", help="不使用 TLS（不推荐）")
+    p_init.add_argument("--mqtt-username", default="")
+    p_init.add_argument("--mqtt-ca", default="")
+    p_init.add_argument("--mqtt-client-id", default="")
     p_init.set_defaults(func=cmd_init)
 
     p_who = sub.add_parser("whoami")

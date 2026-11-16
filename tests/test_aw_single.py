@@ -69,6 +69,19 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(bad.returncode, 1)
         self.assertIn("PROJECT_MISMATCH", bad.stdout)
 
+    def test_init_mqtt_config(self):
+        root2 = self.tmp / "root2"
+        out = run(["init", "--root", str(root2), "--code-root", str(self.code),
+                   "--docs-root", str(self.docs), "--base-branch", "main",
+                   "--mqtt-host", "broker.example.com", "--mqtt-port", "8883",
+                   "--mqtt-username", "aw"], self.tmp)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        cfg = json.loads((root2 / ".aw" / "config.json").read_text(encoding="utf-8"))
+        self.assertTrue(cfg["mqtt"]["enabled"])
+        self.assertEqual(cfg["mqtt"]["host"], "broker.example.com")
+        self.assertEqual(cfg["mqtt"]["password_env"], "AW_MQTT_PASSWORD")
+        self.assertNotIn("password", cfg["mqtt"])
+
     def test_vendored_paho_import(self):
         vendor = str(ROOT / "vendor")
         sys.path.insert(0, vendor)

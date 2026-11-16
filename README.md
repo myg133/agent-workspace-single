@@ -15,6 +15,39 @@ MVP 已实现：`scripts/aw_single.py`。
 
 MQTT 依赖已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要 `pip install`。
 
+## MQTT 配置
+
+MQTT 默认关闭。需要连接时，在 `.aw/config.json` 写：
+
+```json
+{
+  "mqtt": {
+    "enabled": true,
+    "host": "broker.example.com",
+    "port": 8883,
+    "tls": true,
+    "ca_file": "",
+    "username": "",
+    "password_env": "AW_MQTT_PASSWORD",
+    "client_id": "",
+    "keepalive": 30,
+    "topic_prefix": "aw/v1"
+  }
+}
+```
+
+或用 `init` 参数：
+
+```bash
+aw_single.py init --root . \
+  --code-root D:/proj/app --docs-root D:/proj/docs \
+  --base-branch develop \
+  --mqtt-host broker.example.com --mqtt-port 8883 \
+  --mqtt-username aw --mqtt-ca D:/certs/ca.pem
+```
+
+密码通过 `AW_MQTT_PASSWORD` 提供，不写进配置。MQTT 客户端尚未接入 watcher，当前只完成配置契约。
+
 ```bash
 python scripts/aw_single.py init --root . \
   --code-root D:/proj/app --docs-root D:/proj/docs --base-branch develop

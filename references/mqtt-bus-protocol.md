@@ -18,6 +18,33 @@
 - 用 MQTT 做 claim 仲裁；
 - 把 presence 写进 bus。
 
+## 1.1 Project 身份
+
+`project_id` 不手填，由代码仓库 remote 自动推导：
+
+```text
+origin = git@github.com:myg133/agent-workspace-single.git
+       ↓ 归一化
+alias  = github.com/myg133/agent-workspace-single
+id     = p-<sha256(alias)[:12]>
+```
+
+规则：
+
+- 优先 `origin`，没有就用第一个 remote；
+- 支持 scp-like / ssh / https；
+- 去掉用户名、密码、协议、`.git`；
+- host 小写；默认端口（22/80/443）省略；
+- 没有 remote 时用根 commit：`root:<sha>`；
+- 配置文件写入 `project_id / project_alias / project_source`；
+- MQTT 启动前跑 `project check`，config 与 remote 不一致就拒绝连接。
+
+```bash
+aw_single.py project id
+aw_single.py project alias
+aw_single.py project check
+```
+
 ## 2. Bus 分支
 
 位置：**代码仓库**的 orphan 分支 `refs/heads/bus`。

@@ -39,7 +39,10 @@
   "base_branch": "develop",
   "worktree_root": "D:/proj/worktrees",
   "branch_prefix": "feature/",
-  "demand_dir": "demands"
+  "demand_dir": "demands",
+  "project_id": "p-9f8e7d6c5b4a",
+  "project_alias": "github.com/myg133/agent-workspace-single",
+  "project_source": "git:origin"
 }
 ```
 
@@ -183,6 +186,9 @@ aw_single.py watch [--once] [--ensure] [--status] [--stop] \
   [--interval 5] [--exec "<command>"] [--json]
 
 aw_single.py presence [--json]
+aw_single.py project id
+aw_single.py project alias
+aw_single.py project check
 ```
 
 ### 9.1 本地消息

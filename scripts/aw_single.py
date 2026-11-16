@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import os
 import re
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 REQ_RE = re.compile(r"^REQ-\d{3,}$")
 STATE_DIR = ".aw"
@@ -533,6 +535,92 @@ def _update_presence(root: Path) -> None:
         })
 
 
+
+def _normalize_remote(url: str) -> str:
+    """把 git remote 归一成 host/owner/repo；本地路径返回空。"""
+    text = (url or "").strip()
+    if not text or text.startswith("file://") or text.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", text):
+        return ""
+    scheme = ""
+    port = None
+    path = ""
+    if "://" in text:
+        try:
+            parsed = urlparse(text)
+        except ValueError:
+            return ""
+        scheme = (parsed.scheme or "").lower()
+        host = (parsed.hostname or "").lower()
+        try:
+            port = parsed.port
+        except ValueError:
+            port = None
+        path = parsed.path or ""
+    else:
+        match = re.match(r"^(?:[^@/]+@)?([^:/]+):(.+)$", text)
+        if not match:
+            return ""
+        host = match.group(1).lower()
+        path = match.group(2)
+    if port and not (scheme == "https" and port == 443) and not (scheme == "http" and port == 80) and not (scheme in ("ssh", "git+ssh") and port == 22):
+        host = "%s:%d" % (host, port)
+    path = path.strip("/")
+    if path.endswith(".git"):
+        path = path[:-4]
+    if not host or not path:
+        return ""
+    return host + "/" + path
+
+
+def _project_identity(code_root: Path) -> dict:
+    if not code_root.is_dir():
+        raise ToolError("code_root 不存在: %s" % code_root, 2)
+    remotes = git("remote", cwd=code_root, check=False).stdout.split()
+    name = "origin" if "origin" in remotes else (remotes[0] if remotes else "")
+    if name:
+        url = git("remote", "get-url", name, cwd=code_root, check=False).stdout.strip()
+        alias = _normalize_remote(url)
+        if alias:
+            return {
+                "project_id": "p-" + hashlib.sha256(alias.encode("utf-8")).hexdigest()[:12],
+                "project_alias": alias,
+                "project_source": "git:%s" % name,
+            }
+    roots = git("rev-list", "--max-parents=0", "HEAD", cwd=code_root, check=False)
+    shas = [x.strip() for x in roots.stdout.splitlines() if x.strip()]
+    if not shas:
+        raise ToolError("无法从 remote 或根 commit 推导 project_id: %s" % code_root, 2)
+    root_sha = sorted(shas)[0]
+    alias = "root:" + root_sha
+    return {
+        "project_id": "p-" + hashlib.sha256(alias.encode("utf-8")).hexdigest()[:12],
+        "project_alias": alias,
+        "project_source": "git:root-commit",
+    }
+
+
+def cmd_project(args) -> int:
+    _root, cfg = load_config(args)
+    info = _project_identity(Path(cfg["code_root"]))
+    action = args.action
+    if action == "id":
+        print(info["project_id"])
+        return 0
+    if action == "alias":
+        print(info["project_alias"])
+        return 0
+    if action == "check":
+        configured = str(cfg.get("project_id") or "").strip()
+        if not configured:
+            print("PROJECT_MISSING config.project_id")
+            return 1
+        if configured != info["project_id"]:
+            print("PROJECT_MISMATCH config=%s current=%s" % (configured, info["project_id"]))
+            return 1
+        print("PROJECT_OK %s %s" % (info["project_id"], info["project_alias"]))
+        return 0
+    raise ToolError("未知 project 操作: %s" % action, 2)
+
 def cmd_presence(args) -> int:
     root, _cfg = load_config(args)
     _update_presence(root)
@@ -582,10 +670,14 @@ def cmd_init(args) -> int:
     else:
         worktree_root = (root / "worktrees").resolve()
     worktree_root.mkdir(parents=True, exist_ok=True)
+    project = _project_identity(code)
     config = {
         "profile": "single",
         "version": 1,
         "code_root": str(code),
+        "project_id": project["project_id"],
+        "project_alias": project["project_alias"],
+        "project_source": project["project_source"],
         "docs_root": str(docs),
         "base_branch": args.base_branch,
         "worktree_root": str(worktree_root),
@@ -1064,6 +1156,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_m.add_argument("--timeout", type=int, default=120)
     p_m.add_argument("--json", action="store_true")
     p_m.set_defaults(func=cmd_msg)
+
+    p_project = sub.add_parser("project", help="项目身份（MQTT 用）")
+    p_project.add_argument("action", choices=["id", "alias", "check"])
+    p_project.set_defaults(func=cmd_project)
 
     p_presence = sub.add_parser("presence", help="查看本地 agent 在线状态")
     p_presence.add_argument("--json", action="store_true")

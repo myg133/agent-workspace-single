@@ -47,6 +47,28 @@ class SingleCase(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
+    def test_project_id_remote_normalization(self):
+        git(["remote", "add", "origin", "https://github.com/Example/Demo.git"], self.code)
+        first = run(["project", "id"], self.tmp)
+        alias = run(["project", "alias"], self.tmp)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertIn("github.com/Example/Demo", alias.stdout)
+        git(["remote", "set-url", "origin", "git@github.com:Example/Demo.git"], self.code)
+        second = run(["project", "id"], self.tmp)
+        self.assertEqual(first.stdout.strip(), second.stdout.strip())
+
+    def test_project_check_detects_mismatch(self):
+        out = run(["project", "check"], self.tmp)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("PROJECT_OK", out.stdout)
+        cfg_path = self.tmp / ".aw" / "config.json"
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        cfg["project_id"] = "p-wrong"
+        cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+        bad = run(["project", "check"], self.tmp)
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("PROJECT_MISMATCH", bad.stdout)
+
     def test_vendored_paho_import(self):
         vendor = str(ROOT / "vendor")
         sys.path.insert(0, vendor)

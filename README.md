@@ -27,6 +27,17 @@
     └── queue.json
 ```
 
+## 角色
+
+| 角色 | 文档 | 说明 |
+|------|------|------|
+| Planner（可选） | [planner.md](references/roles/planner.md) | 优先级、跨 BA 边界、ADR |
+| BA | [ba.md](references/roles/ba.md) | 需求、验收、状态、claim、派单 |
+| Dev | [dev.md](references/roles/dev.md) | 无状态执行者，worktree 内实现 |
+| QA | [qa.md](references/roles/qa.md) | 只读验证，报告交 BA |
+
+暂不设 Deploy / Explore 常驻角色。
+
 ## 只做什么
 
 - 单机多 agent；

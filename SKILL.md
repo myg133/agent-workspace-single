@@ -30,6 +30,13 @@ metadata:
 - 需要 workspace 的 `code/BA/Deploy` 布局；
 - 需要完整 audit/verify/upgrade。
 
+## 角色
+
+- `references/roles/planner.md`（可选）
+- `references/roles/ba.md`
+- `references/roles/dev.md`
+- `references/roles/qa.md`
+
 ## 入口
 
 设计阶段先读：

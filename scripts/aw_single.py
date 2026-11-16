@@ -519,6 +519,359 @@ def cmd_claim(args) -> int:
     raise ToolError("未知 claim 操作: %s" % action, 2)
 
 
+
+# ---------------------------------------------------------------- local messages
+
+def _safe_agent(value: str) -> str:
+    text = (value or "").strip()
+    if not re.match(r"^[A-Za-z0-9._-]{1,64}$", text):
+        raise ToolError("agent_id 非法: %r" % value, 2)
+    return text
+
+
+def _inbox_dir(root: Path, agent: str) -> Path:
+    return root / STATE_DIR / "inbox" / _safe_agent(agent)
+
+
+def _read_ids(root: Path, agent: str) -> set[str]:
+    data = read_json(root / STATE_DIR / "msg-read" / ("%s.json" % agent), {})
+    return set(str(x) for x in (data.get("ids") or []))
+
+
+def _save_read_ids(root: Path, agent: str, ids: set[str]) -> None:
+    write_json(root / STATE_DIR / "msg-read" / ("%s.json" % agent),
+               {"ids": sorted(ids)[-5000:]})
+
+
+def _messages(root: Path, agent: str) -> list[dict]:
+    folder = _inbox_dir(root, agent)
+    out = []
+    if not folder.is_dir():
+        return out
+    for path in folder.glob("*.json"):
+        data = read_json(path, None)
+        if isinstance(data, dict) and data.get("id"):
+            data["_path"] = str(path)
+            out.append(data)
+    out.sort(key=lambda m: (m.get("at", ""), m.get("id", "")))
+    return out
+
+
+def _unread(root: Path, agent: str) -> list[dict]:
+    read = _read_ids(root, agent)
+    return [m for m in _messages(root, agent) if str(m.get("id")) not in read]
+
+
+def _default_expect(kind: str) -> str:
+    if kind in ("question", "blocker", "handoff"):
+        return "reply"
+    return "none"
+
+
+def _send_local(root: Path, ident: dict, to: list[str], kind: str, body: str,
+                expect: str, subject: str = "") -> str:
+    mid = secrets.token_hex(4)
+    at = _now()
+    for target in to:
+        target = _safe_agent(target)
+        msg = {
+            "id": mid,
+            "from": ident["agent_id"],
+            "to": [target],
+            "at": at,
+            "type": kind,
+            "expect": expect,
+            "body": body,
+            "subject": subject,
+        }
+        write_json(_inbox_dir(root, target) / ("%s.json" % mid), msg)
+    return mid
+
+
+def cmd_msg(args) -> int:
+    root, _cfg = load_config(args)
+    ident = _identity(args)
+    _record_session(root, ident)
+    if args.action == "send":
+        to = [x.strip() for x in (args.to or "").split(",") if x.strip()]
+        if not to:
+            raise ToolError("--to 不能为空", 2)
+        body = (args.body or "").strip()
+        if not body:
+            raise ToolError("--body 不能为空", 2)
+        expect = args.expect or _default_expect(args.type)
+        mid = _send_local(root, ident, to, args.type, body, expect, args.subject or "")
+        print("SENT %s" % mid)
+        return 0
+    if args.action == "inbox":
+        messages = _messages(root, ident["agent_id"])
+        if not args.all:
+            read = _read_ids(root, ident["agent_id"])
+            messages = [m for m in messages if str(m.get("id")) not in read]
+        if args.limit:
+            messages = messages[:args.limit]
+        if args.json:
+            print(json.dumps([{k: v for k, v in m.items() if k != "_path"}
+                              for m in messages], ensure_ascii=False, indent=2))
+        else:
+            if not messages:
+                print("（无消息）")
+            for m in messages:
+                print("%s\t%s\t%s\t%s\t%s\t%s" % (
+                    m.get("id"), m.get("at"), m.get("from"),
+                    m.get("type"), m.get("expect"), m.get("subject") or ""))
+        if messages and not args.peek:
+            ids = _read_ids(root, ident["agent_id"])
+            ids |= {str(m["id"]) for m in messages}
+            _save_read_ids(root, ident["agent_id"], ids)
+        return 0
+    if args.action == "ack":
+        mid = (args.id or "").strip()
+        if not mid:
+            raise ToolError("用法: msg ack <id>", 2)
+        found = None
+        for m in _messages(root, ident["agent_id"]):
+            if str(m.get("id")) == mid:
+                found = m
+                break
+        if not found:
+            print("NOT_FOUND %s" % mid)
+            return 3
+        found["ack_at"] = _now()
+        found["acked_by"] = ident["agent_id"]
+        msg_path = Path(found.pop("_path"))
+        write_json(msg_path, found)
+        if found.get("from") and found["from"] != ident["agent_id"]:
+            _send_local(root, ident, [found["from"]], "ack", "ACK %s" % mid,
+                        "none", "ACK")
+        print("ACKED %s" % mid)
+        return 0
+    if args.action == "wait":
+        timeout = max(1, int(args.timeout or 120))
+        deadline = time.time() + timeout
+        while True:
+            unread = _unread(root, ident["agent_id"])
+            if unread:
+                if args.json:
+                    print(json.dumps(unread, ensure_ascii=False, indent=2))
+                else:
+                    for m in unread:
+                        print("%s\t%s\t%s\t%s" % (m["id"], m["from"], m["type"],
+                                                  m.get("subject") or ""))
+                if args.consume:
+                    ids = _read_ids(root, ident["agent_id"])
+                    ids |= {str(m["id"]) for m in unread}
+                    _save_read_ids(root, ident["agent_id"], ids)
+                return 0
+            if time.time() >= deadline:
+                print("NO_MESSAGES")
+                return 3
+            time.sleep(1)
+    raise ToolError("未知 msg 操作: %s" % args.action, 2)
+
+
+# ---------------------------------------------------------------- wake
+
+def _pid_alive(pid: int) -> bool:
+    if not pid or pid <= 0:
+        return False
+    if os.name == "nt":
+        # os.kill(pid, 0) 对已退出但句柄未释放的进程可能返回成功。
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        handle = ctypes.windll.kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            ok = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+            return bool(ok) and code.value == STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _watch_state_path(root: Path) -> Path:
+    return root / STATE_DIR / "watch-state.json"
+
+
+def _wake_seen_path(root: Path, agent: str) -> Path:
+    return root / STATE_DIR / "wake-seen" / ("%s.json" % agent)
+
+
+def _scan_wake(root: Path, seed_read: bool = False) -> list[dict]:
+    inbox = root / STATE_DIR / "inbox"
+    if not inbox.is_dir():
+        return []
+    events = []
+    for folder in sorted(inbox.iterdir()):
+        if not folder.is_dir():
+            continue
+        agent = folder.name
+        seen_data = read_json(_wake_seen_path(root, agent), {})
+        seen = set(str(x) for x in (seen_data.get("ids") or []))
+        if seed_read:
+            seen |= _read_ids(root, agent)
+        messages = _messages(root, agent)
+        fresh = [m for m in messages if str(m.get("id")) not in seen]
+        if not fresh:
+            if seed_read:
+                write_json(_wake_seen_path(root, agent), {"ids": sorted(seen)[-2000:]})
+            continue
+        summaries = [{
+            "id": m.get("id"), "from": m.get("from"), "type": m.get("type"),
+            "expect": m.get("expect"), "subject": m.get("subject") or "",
+            "at": m.get("at"),
+        } for m in fresh[-20:]]
+        write_json(root / STATE_DIR / "wake" / ("%s.json" % agent),
+                   {"agent": agent, "updated_at": _now(), "messages": summaries})
+        seen |= {str(m.get("id")) for m in fresh}
+        write_json(_wake_seen_path(root, agent), {"ids": sorted(seen)[-2000:]})
+        events.append({"agent": agent, "messages": summaries})
+    return events
+
+
+def _watch_status(root: Path) -> int:
+    data = read_json(_watch_state_path(root), {})
+    pid = int(data.get("pid") or 0)
+    if not _pid_alive(pid):
+        print("WATCH_STOPPED")
+        return 0
+    age = _dt.datetime.now().timestamp() - float(data.get("heartbeat") or 0)
+    print("WATCH_RUNNING pid=%s age=%ds" % (pid, max(0, int(age))))
+    return 0
+
+
+def _watch_stop(root: Path) -> int:
+    data = read_json(_watch_state_path(root), {})
+    pid = int(data.get("pid") or 0)
+    stop = root / STATE_DIR / "watch.stop"
+    if not _pid_alive(pid):
+        stop.unlink(missing_ok=True)
+        print("WATCH_STOPPED")
+        return 0
+    # 先请求自停，避免 Windows detach 进程 taskkill 的时序问题
+    stop.write_text("stop\n", encoding="utf-8")
+    for _ in range(100):
+        time.sleep(0.1)
+        if not _pid_alive(pid):
+            stop.unlink(missing_ok=True)
+            print("WATCH_STOPPED pid=%s" % pid)
+            return 0
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                           capture_output=True, check=False, **_win_no_window())
+        else:
+            os.kill(pid, 15)
+    except OSError:
+        pass
+    for _ in range(30):
+        time.sleep(0.1)
+        if not _pid_alive(pid):
+            stop.unlink(missing_ok=True)
+            print("WATCH_STOPPED pid=%s" % pid)
+            return 0
+    stop.unlink(missing_ok=True)
+    print("WATCH_STOP_FAILED pid=%s" % pid, file=sys.stderr)
+    return 1
+
+
+def _run_watch_once(root: Path, args, seed_read: bool = False) -> int:
+    events = _scan_wake(root, seed_read=seed_read)
+    if args.json:
+        for event in events:
+            print(json.dumps(event, ensure_ascii=False), flush=True)
+    else:
+        for event in events:
+            for m in event["messages"]:
+                print("WAKE %s %s %s" % (event["agent"], m.get("id"), m.get("type")),
+                      flush=True)
+    if args.exec:
+        for event in events:
+            env = dict(os.environ)
+            env["AW_WAKE_AGENT"] = event["agent"]
+            env["AW_WAKE_MSG_ID"] = str(event["messages"][0].get("id", ""))
+            env["AW_WAKE_TYPE"] = str(event["messages"][0].get("type", ""))
+            env["AW_WAKE_FROM"] = str(event["messages"][0].get("from", ""))
+            subprocess.Popen(args.exec, shell=True, env=env, cwd=str(root),
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, **_win_no_window())
+    return 0 if events else 3
+
+
+def cmd_watch(args) -> int:
+    root, _cfg = load_config(args)
+    if args.status:
+        return _watch_status(root)
+    if args.stop:
+        return _watch_stop(root)
+    if args.ensure:
+        (root / STATE_DIR / "watch.stop").unlink(missing_ok=True)
+        state = read_json(_watch_state_path(root), {})
+        if _pid_alive(int(state.get("pid") or 0)):
+            print("WATCH_RUNNING pid=%s" % state["pid"])
+            return 0
+        cmd = [sys.executable, str(Path(__file__).resolve()), "watch",
+               "--interval", str(args.interval)]
+        if args.exec:
+            cmd += ["--exec", args.exec]
+        if args.json:
+            cmd.append("--json")
+        log = root / STATE_DIR / "watch.log"
+        err = root / STATE_DIR / "watch.err.log"
+        out_handle = open(log, "a", encoding="utf-8")
+        err_handle = open(err, "a", encoding="utf-8")
+        try:
+            kwargs = {"cwd": str(root), "stdin": subprocess.DEVNULL,
+                      "stdout": out_handle, "stderr": err_handle}
+            if os.name == "nt":
+                flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+                flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+                proc = subprocess.Popen(cmd, creationflags=flags, **kwargs)
+            else:
+                kwargs["start_new_session"] = True
+                proc = subprocess.Popen(cmd, **kwargs)
+        finally:
+            out_handle.close()
+            err_handle.close()
+        for _ in range(80):
+            time.sleep(0.25)
+            if proc.poll() is not None:
+                break
+            state = read_json(_watch_state_path(root), {})
+            if _pid_alive(int(state.get("pid") or 0)):
+                print("WATCH_STARTED pid=%s" % state["pid"])
+                return 0
+        print("WATCH_START_FAILED 见 %s" % err, file=sys.stderr)
+        return 1
+    if args.once:
+        return _run_watch_once(root, args, seed_read=True)
+    state_path = _watch_state_path(root)
+    (root / STATE_DIR / "watch.stop").unlink(missing_ok=True)
+    state = read_json(state_path, {})
+    write_json(state_path, {"pid": os.getpid(), "started_at": _now(),
+                            "heartbeat": time.time(), "interval": args.interval})
+    _run_watch_once(root, args, seed_read=True)
+    try:
+        while True:
+            time.sleep(max(1, args.interval))
+            if (root / STATE_DIR / "watch.stop").exists():
+                (root / STATE_DIR / "watch.stop").unlink(missing_ok=True)
+                return 0
+            _run_watch_once(root, args)
+            write_json(state_path, {"pid": os.getpid(), "started_at": state.get("started_at") or _now(),
+                                    "heartbeat": time.time(), "interval": args.interval})
+    except KeyboardInterrupt:
+        return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aw_single.py", description="单机双仓 Agent 协作")
     parser.add_argument("--config", default=None, help=".aw/config.json 或其目录")
@@ -551,6 +904,32 @@ def build_parser() -> argparse.ArgumentParser:
     p_c.add_argument("--force", action="store_true")
     p_c.add_argument("--remove-worktree", action="store_true")
     p_c.set_defaults(func=cmd_claim)
+
+    p_m = sub.add_parser("msg", help="本地消息")
+    p_m.add_argument("action", choices=["send", "inbox", "ack", "wait"])
+    p_m.add_argument("id", nargs="?", default="")
+    p_m.add_argument("--to", default="")
+    p_m.add_argument("--type", default="fyi")
+    p_m.add_argument("--body", default="")
+    p_m.add_argument("--subject", default="")
+    p_m.add_argument("--expect", default="")
+    p_m.add_argument("--all", action="store_true")
+    p_m.add_argument("--peek", action="store_true")
+    p_m.add_argument("--consume", action="store_true")
+    p_m.add_argument("--limit", type=int, default=0)
+    p_m.add_argument("--timeout", type=int, default=120)
+    p_m.add_argument("--json", action="store_true")
+    p_m.set_defaults(func=cmd_msg)
+
+    p_w = sub.add_parser("watch", help="本地消息唤醒")
+    p_w.add_argument("--once", action="store_true")
+    p_w.add_argument("--ensure", action="store_true")
+    p_w.add_argument("--status", action="store_true")
+    p_w.add_argument("--stop", action="store_true")
+    p_w.add_argument("--interval", type=int, default=5)
+    p_w.add_argument("--exec", default="")
+    p_w.add_argument("--json", action="store_true")
+    p_w.set_defaults(func=cmd_watch)
 
     for sp in sub.choices.values():
         sp.add_argument("--agent", default=argparse.SUPPRESS, help=argparse.SUPPRESS)

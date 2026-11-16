@@ -56,4 +56,9 @@ python scripts/aw_single.py claim next
 python scripts/aw_single.py claim list
 python scripts/aw_single.py claim release REQ-001
 python scripts/aw_single.py claim doctor
+
+python scripts/aw_single.py msg send --to ba-1 --type question --body "ping"
+python scripts/aw_single.py msg inbox
+python scripts/aw_single.py msg wait --timeout 120
+python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
 ```

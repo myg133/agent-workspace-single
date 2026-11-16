@@ -173,7 +173,41 @@ aw_single.py claim take REQ-001
 aw_single.py claim list
 aw_single.py claim release REQ-001 [--remove-worktree]
 aw_single.py claim doctor
+
+aw_single.py msg send --to ba-1 --type question --body "..."
+aw_single.py msg inbox [--all] [--peek] [--json]
+aw_single.py msg ack <id>
+aw_single.py msg wait [--timeout 120] [--consume]
+
+aw_single.py watch [--once] [--ensure] [--status] [--stop] \
+  [--interval 5] [--exec "<command>"] [--json]
 ```
+
+### 9.1 本地消息
+
+- 存储：`.aw/inbox/<agent>/<id>.json`；
+- 已读：`.aw/msg-read/<agent>.json`；
+- 唤醒：`.aw/wake/<agent>.json`（只含摘要，不含正文）；
+- 无网络、无 git、无共享锁文件（每消息一个文件）；
+- `msg send` 只负责写收件人 inbox；唤醒由 `watch` 完成。
+
+### 9.2 无人值守
+
+```bash
+aw_single.py watch --ensure --exec "bash start-agent.sh"
+```
+
+`--exec` 会带：
+
+```text
+AW_WAKE_AGENT
+AW_WAKE_MSG_ID
+AW_WAKE_TYPE
+AW_WAKE_FROM
+```
+
+如果宿主（DSH/omp）能读 `.aw/wake/<agent>.json`，也可以不用 `--exec`，
+由宿主插件把唤醒转成一次会话。
 
 退出码：
 

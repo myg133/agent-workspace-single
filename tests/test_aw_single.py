@@ -102,6 +102,53 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(out.returncode, 3)
         self.assertIn("ALREADY_QUEUED", out.stdout)
 
+    def test_msg_send_inbox_ack(self):
+        sent = run(["msg", "send", "--to", "ba-2", "--type", "question",
+                    "--body", "ping"], self.tmp, self.env)
+        self.assertEqual(sent.returncode, 0, sent.stderr)
+        mid = sent.stdout.split()[1]
+        inbox = run(["msg", "inbox"], self.tmp,
+                    {"AW_AGENT_ID": "ba-2"})
+        self.assertEqual(inbox.returncode, 0, inbox.stderr)
+        self.assertIn(mid, inbox.stdout)
+        ack = run(["msg", "ack", mid], self.tmp,
+                  {"AW_AGENT_ID": "ba-2"})
+        self.assertEqual(ack.returncode, 0, ack.stderr)
+        self.assertIn("ACKED", ack.stdout)
+        back = run(["msg", "inbox"], self.tmp, self.env)
+        self.assertEqual(back.returncode, 0, back.stderr)
+        self.assertIn("ACK", back.stdout)
+
+    def test_msg_wait_timeout(self):
+        out = run(["msg", "wait", "--timeout", "1"], self.tmp, self.env)
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("NO_MESSAGES", out.stdout)
+
+    def test_watch_once_writes_wake(self):
+        sent = run(["msg", "send", "--to", "ba-1", "--type", "question",
+                    "--body", "wake-me"], self.tmp, {"AW_AGENT_ID": "ba-2"})
+        mid = sent.stdout.split()[1]
+        first = run(["watch", "--once"], self.tmp)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        wake = self.tmp / ".aw" / "wake" / "ba-1.json"
+        self.assertTrue(wake.is_file())
+        self.assertIn(mid, wake.read_text(encoding="utf-8"))
+        second = run(["watch", "--once"], self.tmp)
+        self.assertEqual(second.returncode, 3)
+
+    def test_watch_ensure_start_stop(self):
+        started = run(["watch", "--ensure", "--interval", "1"], self.tmp)
+        self.assertEqual(started.returncode, 0, started.stderr)
+        status = run(["watch", "--status"], self.tmp)
+        self.assertIn("WATCH_RUNNING", status.stdout)
+        stopped = run(["watch", "--stop"], self.tmp)
+        self.assertEqual(stopped.returncode, 0, stopped.stderr)
+        self.assertIn("WATCH_STOPPED", stopped.stdout)
+
+    def test_watch_status_stopped(self):
+        out = run(["watch", "--status"], self.tmp)
+        self.assertIn("WATCH_STOPPED", out.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -50,13 +50,32 @@
 - BA spawn 新 Dev；
 - 新 Dev 只读上一版报告 + return_reason，继续同一 worktree。
 
-## 6. 消息
+## 6. 消息与唤醒
 
-首版不使用 bus：
+本地消息，不走 bus，不写 git：
 
-- 同一团队用现有聊天/Issue/PR；
-- 需要审计的结论写进 docs 的 `decisions.md` 或 PR 描述；
-- 不新增消息格式。
+```text
+.aw/
+├── inbox/<agent>/<id>.json
+├── msg-read/<agent>.json
+├── wake/<agent>.json
+└── watch-state.json
+```
+
+```bash
+aw_single.py msg send --to ba-1 --type question --body "这个接口用 v2 吗？"
+aw_single.py msg inbox
+aw_single.py msg ack <id>
+aw_single.py msg wait --timeout 120
+aw_single.py watch --ensure --exec "bash start-agent.sh"
+```
+
+- `msg send/inbox/ack/wait`：同机通信，原子文件，无网络；
+- `watch`：扫描未读消息，写 `.aw/wake/<agent>.json`；
+  - `--exec` 可拉起 agent 进程；
+  - `--ensure` 后台常驻，`--status` / `--stop` 管理；
+  - 每次只写消息摘要（id/from/type/expect），不写正文；
+- 需要审计的决策仍写 docs 的 `decisions.md`，消息只是通知。
 
 ## 7. 状态
 

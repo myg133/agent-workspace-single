@@ -57,6 +57,9 @@ aw_single.py msg send --to ba-1 --type question --body "ping"
 
 watcher 写 `.aw/wake/ba-1.json`，插件读取后 steer。
 
+Windows 下 watcher 使用 `CREATE_NO_WINDOW` + `STARTF_USESHOWWINDOW`，
+git 子进程不会反复弹控制台窗口。
+
 插件加载时还会写 `.aw/sessions/<agent>.json`（pid / pid_started_at / session），
 并每 30 秒刷新 `last_seen`。watcher 用这个文件判断本机 agent 是否在线。
 

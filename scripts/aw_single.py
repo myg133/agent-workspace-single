@@ -47,10 +47,22 @@ def _init_console() -> None:
             pass
 
 
+def _win_startupinfo():
+    if os.name != "nt":
+        return None
+    info = subprocess.STARTUPINFO()
+    info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    info.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+    return info
+
+
 def _win_no_window() -> dict:
     if os.name != "nt":
         return {}
-    return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)}
+    return {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+        "startupinfo": _win_startupinfo(),
+    }
 
 
 def git(*args: str, cwd: Path | str, check: bool = True,
@@ -964,6 +976,8 @@ def cmd_watch(args) -> int:
             if os.name == "nt":
                 flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
                 flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+                flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+                kwargs["startupinfo"] = _win_startupinfo()
                 proc = subprocess.Popen(cmd, creationflags=flags, **kwargs)
             else:
                 kwargs["start_new_session"] = True

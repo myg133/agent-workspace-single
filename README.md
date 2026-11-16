@@ -80,3 +80,4 @@ python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
 - [单机 profile](references/single-profile.md)
 - [工作流](references/workflow.md)
 - [目录布局](references/layout.md)
+- [omp 唤醒插件](references/omp.md)

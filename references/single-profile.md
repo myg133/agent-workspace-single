@@ -207,7 +207,7 @@ AW_WAKE_FROM
 ```
 
 如果宿主（DSH/omp）能读 `.aw/wake/<agent>.json`，也可以不用 `--exec`，
-由宿主插件把唤醒转成一次会话。
+由宿主插件把唤醒转成一次会话。omp 安装见 `references/omp.md`。
 
 退出码：
 

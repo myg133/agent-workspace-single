@@ -44,6 +44,7 @@ metadata:
 - `references/single-profile.md`
 - `references/workflow.md`
 - `references/layout.md`
+- `references/omp.md`
 
 命令：
 

@@ -118,4 +118,5 @@ python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
 - [目录布局](references/layout.md)
 - [Setup / 环境变量](references/setup.md)
 - [omp 唤醒插件](references/omp.md)
+- [DSH 唤醒插件](references/dsh.md)
 - [MQTT + bus 协议](references/mqtt-bus-protocol.md)

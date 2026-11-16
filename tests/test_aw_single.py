@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import shutil
@@ -46,6 +47,23 @@ class SingleCase(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_whoami_writes_session_map(self):
+        env = dict(self.env)
+        env["AW_SESSION_ID"] = ""
+        env["DSH_SESSION_ID"] = "sess-map-1"
+        out = run(["whoami"], self.tmp, env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        map_path = self.tmp / ".aw" / "sessions" / "ba-1.map.json"
+        data = json.loads(map_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["session_id"], "sess-map-1")
+        self.assertEqual(data["session_source"], "DSH_SESSION_ID")
+        self.assertTrue(data["session_authoritative"])
+        self.assertEqual(data["map_version"], 2)
+        key = hashlib.sha256(b"sess-map-1").hexdigest()[:16]
+        reverse = json.loads((self.tmp / ".aw" / "sessions" / "by-session" / (key + ".json"))
+                             .read_text(encoding="utf-8"))
+        self.assertEqual(reverse["agent_id"], "ba-1")
 
     def test_project_id_remote_normalization(self):
         git(["remote", "add", "origin", "https://github.com/Example/Demo.git"], self.code)

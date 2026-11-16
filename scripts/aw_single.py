@@ -204,7 +204,7 @@ def _record_session(root: Path, ident: dict) -> None:
     if source == "generated" and old.get("session_id") and old.get("session_source") != "generated":
         sid = old["session_id"]
         source = old.get("session_source") or source
-    write_json(path, {
+    record = {
         "agent_id": ident["agent_id"],
         "session_id": sid,
         "session_source": source,
@@ -214,8 +214,71 @@ def _record_session(root: Path, ident: dict) -> None:
         "pid_started_at": _process_start(os.getpid()),
         "role": os.environ.get("AW_ROLE", ""),
         "host": os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", ""),
-    })
+    }
+    write_json(path, record)
+    _write_session_map(root, record)
 
+
+
+def _by_session_path(root: Path, session_id: str) -> Path:
+    key = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:16]
+    return root / STATE_DIR / "sessions" / "by-session" / ("%s.json" % key)
+
+
+def _write_session_map(root: Path, record: dict) -> None:
+    """写 agent→session 权威映射和 session→agent 反向映射。失败只 warn。"""
+    source = str(record.get("session_source") or "")
+    if source in ("generated", "mcp"):
+        return
+    sid = str(record.get("session_id") or "").strip()
+    if not sid or sid.startswith("proc-"):
+        return
+    agent = str(record.get("agent_id") or "")
+    if not agent:
+        return
+    map_path = root / STATE_DIR / "sessions" / ("%s.map.json" % agent)
+    by_path = _by_session_path(root, sid)
+    old = read_json(map_path, {})
+    if old.get("session_id") == sid and old.get("map_version") == 2 and by_path.exists():
+        try:
+            age = (_dt.datetime.now().astimezone()
+                   - _dt.datetime.fromisoformat(old.get("updated_at", ""))).total_seconds()
+            if age < 60:
+                return
+        except ValueError:
+            pass
+    owner = ""
+    if by_path.exists():
+        owner = str(read_json(by_path, {}).get("agent_id") or "").strip()
+    authoritative = not owner or owner == agent
+    sessions = old.get("sessions") if isinstance(old.get("sessions"), list) else []
+    sessions = [s for s in sessions if isinstance(s, dict) and s.get("session_id") != sid]
+    sessions.append({"session_id": sid, "source": source, "at": _now()})
+    sessions = sessions[-8:]
+    data = {
+        "agent_id": agent,
+        "session_id": sid,
+        "session_source": source,
+        "session_authoritative": authoritative,
+        "sessions": sessions,
+        "host": record.get("host", ""),
+        "cwd": str(Path.cwd()),
+        "pid": 0,
+        "updated_at": _now(),
+        "map_version": 2,
+    }
+    try:
+        write_json(map_path, data)
+        if authoritative:
+            write_json(by_path, {
+                "session_id": sid, "agent_id": agent, "source": source,
+                "updated_at": _now(),
+            })
+        else:
+            print("warn: session %s 已属于 %s，%s 的映射标记为非权威"
+                  % (sid, owner, agent), file=sys.stderr)
+    except OSError as exc:
+        print("warn: 写 session map 失败（不影响命令）: %s" % exc, file=sys.stderr)
 
 def _claims(root: Path) -> list[dict]:
     out = []

@@ -1,6 +1,6 @@
 # BA（主 Agent）
 
-> 层级：主 Agent（人启动）｜docs 的唯一写者｜持有 claim｜派 Dev / QA。
+> 层级：主会话 / 独立会话｜docs 的唯一写者｜持有 claim｜派 Dev / QA。
 
 ## 1. 定位
 

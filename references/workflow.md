@@ -11,6 +11,15 @@
 
 没有 Deploy 角色；部署继续用现有流程。
 
+## 1.1 角色不是进程层级
+
+角色是**权限契约**，不是“必须由 BA spawn 的子进程”。
+
+- 单机小项目可以由同一个人/同一个 agent 切换角色；
+- 但 QA 的独立性会下降，**建议至少 QA 使用独立会话**；
+- 技术约束仍然是：BA 写 status、Dev 只写 worktree、QA 只读不提交；
+- `aw_single.py` 不检查父子进程关系，只看 `agent_id` / 可选 `AW_ROLE`。
+
 ## 2. BA
 
 1. 在 docs 仓库创建 `demands/REQ-xxx/`；

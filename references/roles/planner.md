@@ -1,6 +1,6 @@
 # Planner（可选）
 
-> 层级：主 Agent（人启动）｜只写 docs 的规划文件｜不领 claim、不写 status、不写代码。
+> 层级：独立会话（可选）｜只写 docs 的规划文件｜不领 claim、不写 status、不写代码。
 
 ## 1. 何时启用
 

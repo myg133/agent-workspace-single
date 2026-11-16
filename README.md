@@ -13,6 +13,8 @@
 
 MVP 已实现：`scripts/aw_single.py`。
 
+MQTT 依赖已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要 `pip install`。
+
 ```bash
 python scripts/aw_single.py init --root . \
   --code-root D:/proj/app --docs-root D:/proj/docs --base-branch develop

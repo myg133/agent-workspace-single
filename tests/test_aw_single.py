@@ -47,6 +47,13 @@ class SingleCase(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
+    def test_vendored_paho_import(self):
+        vendor = str(ROOT / "vendor")
+        sys.path.insert(0, vendor)
+        self.addCleanup(lambda: sys.path.remove(vendor) if vendor in sys.path else None)
+        import paho.mqtt.client as mqtt
+        self.assertIn(str(ROOT / "vendor"), str(Path(mqtt.__file__).resolve()))
+
     def test_init_and_whoami(self):
         cfg = json.loads((self.tmp / ".aw" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(cfg["profile"], "single")

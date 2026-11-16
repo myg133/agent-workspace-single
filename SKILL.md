@@ -37,6 +37,10 @@ metadata:
 - `references/roles/dev.md`
 - `references/roles/qa.md`
 
+## 依赖
+
+MQTT 库已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要安装依赖。
+
 ## 入口
 
 先读：

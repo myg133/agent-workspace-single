@@ -95,7 +95,17 @@ def write_json(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name("%s.%d.%s.tmp" % (path.name, os.getpid(), secrets.token_hex(3)))
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    # Windows 上目标文件被其他进程打开时 os.replace 会报 PermissionError（WinError 5/32），
+    # 读方关闭后即可替换；短暂重试，避免 watch 常驻进程因一次共享冲突退出。
+    for attempt in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if os.name != "nt" or attempt == 19:
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 class FileLock:

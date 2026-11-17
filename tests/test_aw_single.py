@@ -1,4 +1,5 @@
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -8,6 +9,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "aw_single.py"
@@ -179,6 +181,26 @@ class SingleCase(unittest.TestCase):
         back = run(["msg", "inbox"], self.tmp, self.env)
         self.assertEqual(back.returncode, 0, back.stderr)
         self.assertIn("ACK", back.stdout)
+
+    def test_write_json_retries_windows_sharing(self):
+        spec = importlib.util.spec_from_file_location("aw_single_test", SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        target = self.tmp / "retry.json"
+        real_replace = mod.os.replace
+        calls = []
+
+        def flaky_replace(*args, **kwargs):
+            calls.append(args)
+            if len(calls) < 3:
+                raise PermissionError("busy")
+            return real_replace(*args, **kwargs)
+
+        with mock.patch.object(mod.os, "name", "nt"), \
+                mock.patch.object(mod.os, "replace", side_effect=flaky_replace) as replace:
+            mod.write_json(target, {"ok": 1})
+        self.assertEqual(replace.call_count, 3)
+        self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["ok"], 1)
 
     def test_req_format_relaxed(self):
         accepted = ["REQ-001", "REQ-ONT-C1", "REQ-ONT-B2", "REQ-ONT-1D"]

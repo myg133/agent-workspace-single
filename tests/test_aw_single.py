@@ -180,6 +180,19 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(back.returncode, 0, back.stderr)
         self.assertIn("ACK", back.stdout)
 
+    def test_req_format_relaxed(self):
+        accepted = ["REQ-001", "REQ-ONT-C1", "REQ-ONT-B2", "REQ-ONT-1D"]
+        for req in accepted:
+            out = run(["queue", "add", req], self.tmp)
+            self.assertEqual(out.returncode, 0, (req, out.stderr))
+        for req in ["REQ-", "REQ--X", "REQ-ONT-", "FOO-1"]:
+            out = run(["queue", "add", req], self.tmp)
+            self.assertEqual(out.returncode, 2, (req, out.stdout, out.stderr))
+            self.assertIn("REQ 格式", out.stderr)
+        bad = run(["claim", "take", "REQ--X"], self.tmp, self.env)
+        self.assertEqual(bad.returncode, 2)
+        self.assertIn("REQ 格式", bad.stderr)
+
     def test_bus_send_and_read(self):
         sent = run(["msg", "send", "--to", "ba-2", "--type", "fyi",
                     "--body", "bus-body"], self.tmp, self.env)

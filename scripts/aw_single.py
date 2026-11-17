@@ -22,7 +22,8 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 
-REQ_RE = re.compile(r"^REQ-\d{3,}$")
+REQ_RE = re.compile(r"^REQ-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+REQ_FORMAT_HINT = "REQ 格式应为 REQ-001 / REQ-ONT-C1"
 STATE_DIR = ".aw"
 
 
@@ -394,7 +395,7 @@ def _claim_next(root: Path, cfg: dict, ident: dict) -> int:
 def _claim_take(root: Path, cfg: dict, ident: dict, req: str) -> int:
     req = req.strip().upper()
     if not REQ_RE.match(req):
-        raise ToolError("REQ 格式应为 REQ-001", 2)
+        raise ToolError(REQ_FORMAT_HINT, 2)
     with FileLock(root / STATE_DIR / "locks" / "claims.lock"):
         claims = _claims(root)
         mine = _holding(claims, ident["agent_id"])
@@ -793,7 +794,7 @@ def cmd_queue(args) -> int:
     if action == "add":
         req = args.req.strip().upper()
         if not REQ_RE.match(req):
-            raise ToolError("REQ 格式应为 REQ-001", 2)
+            raise ToolError(REQ_FORMAT_HINT, 2)
         with FileLock(root / STATE_DIR / "locks" / "claims.lock"):
             queue = _queue(root)
             if any(q.get("req") == req for q in queue):

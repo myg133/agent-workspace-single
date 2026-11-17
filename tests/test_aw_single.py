@@ -180,6 +180,20 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(back.returncode, 0, back.stderr)
         self.assertIn("ACK", back.stdout)
 
+    def test_bus_send_and_read(self):
+        sent = run(["msg", "send", "--to", "ba-2", "--type", "fyi",
+                    "--body", "bus-body"], self.tmp, self.env)
+        self.assertEqual(sent.returncode, 0, sent.stderr)
+        mid = sent.stdout.split()[1]
+        log = run(["bus", "log"], self.tmp)
+        self.assertEqual(log.returncode, 0, log.stderr)
+        self.assertIn(mid, log.stdout)
+        show = run(["bus", "show", mid], self.tmp)
+        self.assertEqual(show.returncode, 0, show.stderr)
+        self.assertIn("bus-body", show.stdout)
+        branch = git(["show-ref", "--verify", "refs/heads/bus"], self.code)
+        self.assertEqual(branch.returncode, 0)
+
     def test_msg_wait_timeout(self):
         out = run(["msg", "wait", "--timeout", "1"], self.tmp, self.env)
         self.assertEqual(out.returncode, 3)

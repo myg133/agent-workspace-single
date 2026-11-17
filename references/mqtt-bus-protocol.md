@@ -287,19 +287,21 @@ watcher 重启后扫描 session，重新发布 online。
 
 ## 7. 当前状态
 
-本文是协议设计，尚未实现 MQTT 客户端。
-
 已实现：
 
 - 本地 inbox / wake / watcher；
-- 单机 claim/worktree。
+- 单机 claim/worktree；
+- bus v2 写入/读取/log/show；
+- MQTT publish/subscribe（vendored paho-mqtt）；
+- watcher presence 发布；
+- transport `auto / mqtt / bus / local` 基础选择。
 
-待实现：
+待完善：
 
-- bus v2；
-- MQTT publish/subscribe；
-- watcher presence publisher；
-- omp MQTT 插件。
+- bus 冲突重试与批量 push；
+- MQTT 断线重连细节；
+- presence 的 watcher 级 TTL/告警；
+- 完整多机联调。
 
 ## 8. 不做
 

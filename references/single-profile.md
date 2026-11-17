@@ -43,6 +43,11 @@
   "project_id": "p-9f8e7d6c5b4a",
   "project_alias": "github.com/myg133/agent-workspace-single",
   "project_source": "git:origin",
+  "transport": {
+    "mode": "auto",
+    "audit_bus": true,
+    "bus": {"enabled": true, "branch": "bus", "push": true, "poll_seconds": 30}
+  },
   "mqtt": {
     "enabled": true,
     "host": "broker.example.com",
@@ -214,6 +219,8 @@ aw_single.py presence [--json]
 aw_single.py project id
 aw_single.py project alias
 aw_single.py project check
+aw_single.py bus log
+aw_single.py bus show <id>
 ```
 
 ### 9.1 本地消息

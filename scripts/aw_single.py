@@ -14,8 +14,10 @@ import json
 import os
 import re
 import secrets
+import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -760,6 +762,11 @@ def cmd_init(args) -> int:
         "worktree_root": str(worktree_root),
         "branch_prefix": args.branch_prefix,
         "demand_dir": args.demand_dir,
+        "transport": {
+            "mode": args.transport,
+            "audit_bus": True,
+            "bus": {"enabled": True, "branch": "bus", "push": True, "poll_seconds": 30},
+        },
         "mqtt": mqtt,
     }
     write_json(state / "config.json", config)
@@ -879,9 +886,313 @@ def _default_expect(kind: str) -> str:
     return "none"
 
 
+
+def _bus_branch(cfg: dict) -> str:
+    bus = cfg.get("transport", {}).get("bus", {}) if isinstance(cfg.get("transport"), dict) else {}
+    return str(bus.get("branch") or "bus")
+
+
+def _bus_enabled(cfg: dict) -> bool:
+    trans = cfg.get("transport", {}) if isinstance(cfg.get("transport"), dict) else {}
+    if str(trans.get("mode") or "auto") == "local":
+        return False
+    bus = trans.get("bus", {}) if isinstance(trans.get("bus"), dict) else {}
+    return bool(bus.get("enabled", True))
+
+
+def _git_raw(args: list[str], cwd: Path, data: bytes | None = None,
+             env: dict | None = None) -> subprocess.CompletedProcess:
+    proc = subprocess.run(
+        ["git", "-c", "core.quotepath=false", *args],
+        cwd=str(cwd), input=data, capture_output=True, timeout=120,
+        env=env, **_win_no_window(),
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or b"").decode("utf-8", "replace").strip()
+        raise ToolError("git %s 失败: %s" % (" ".join(args), detail), 1)
+    return proc
+
+
+def _bus_write(root: Path, cfg: dict, message: dict) -> str:
+    code = Path(cfg["code_root"])
+    branch = _bus_branch(cfg)
+    ref = "refs/heads/%s" % branch
+    body = json.dumps(message, ensure_ascii=False, indent=2).encode("utf-8")
+    limit = int(cfg.get("transport", {}).get("max_body_bytes", 8 * 1024 * 1024))
+    if len(body) > limit:
+        raise ToolError("消息过大: %d > %d" % (len(body), limit), 2)
+    parent = git("rev-parse", "--verify", ref, cwd=code, check=False)
+    parent_sha = parent.stdout.strip() if parent.returncode == 0 else ""
+    index = root / STATE_DIR / "locks" / ("bus-index-%d-%s" % (os.getpid(), secrets.token_hex(3)))
+    index.parent.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    env["GIT_INDEX_FILE"] = str(index)
+    try:
+        if parent_sha:
+            _git_raw(["read-tree", parent_sha], code, env=env)
+        else:
+            _git_raw(["read-tree", "--empty"], code, env=env)
+        blob = _git_raw(["hash-object", "-w", "--stdin"], code, data=body).stdout.strip().decode()
+        name = "messages/%s.json" % message["id"]
+        _git_raw(["update-index", "--add", "--cacheinfo", "100644,%s,%s" % (blob, name)], code, env=env)
+        tree = _git_raw(["write-tree"], code, env=env).stdout.strip().decode()
+        cmd = ["-c", "user.name=aw-single", "-c", "user.email=aw-single@local",
+               "commit-tree", tree]
+        if parent_sha:
+            cmd += ["-p", parent_sha]
+        cmd += ["-m", "[aw] %s %s -> %s %s" % (
+            message["id"], message.get("from", ""), ",".join(message.get("to") or []),
+            message.get("type", ""))]
+        commit = _git_raw(cmd, code, env=env).stdout.strip().decode()
+        old = [parent_sha] if parent_sha else []
+        _git_raw(["update-ref", ref, commit, *old], code, env=env)
+        return commit
+    finally:
+        try:
+            index.unlink()
+        except OSError:
+            pass
+
+
+def _bus_push(root: Path, cfg: dict) -> None:
+    bus = cfg.get("transport", {}).get("bus", {}) if isinstance(cfg.get("transport"), dict) else {}
+    if not bus.get("push", True):
+        return
+    code = Path(cfg["code_root"])
+    if not git("remote", cwd=code, check=False).stdout.strip():
+        return
+    proc = git("push", "-q", "origin", "refs/heads/%s:refs/heads/%s" % (
+        _bus_branch(cfg), _bus_branch(cfg)), cwd=code, check=False, timeout=30)
+    if proc.returncode != 0:
+        print("warn: bus push 失败，稍后重试: %s" % (proc.stderr or "").strip(), file=sys.stderr)
+
+
+def _bus_ref(root: Path, cfg: dict) -> str:
+    branch = _bus_branch(cfg)
+    remote = "refs/remotes/origin/%s" % branch
+    if git("rev-parse", "--verify", remote, cwd=Path(cfg["code_root"]), check=False).returncode == 0:
+        return remote
+    local = "refs/heads/%s" % branch
+    if git("rev-parse", "--verify", local, cwd=Path(cfg["code_root"]), check=False).returncode == 0:
+        return local
+    return ""
+
+
+def _bus_fetch(root: Path, cfg: dict) -> None:
+    if not _bus_enabled(cfg):
+        return
+    code = Path(cfg["code_root"])
+    if not git("remote", cwd=code, check=False).stdout.strip():
+        return
+    bus = cfg.get("transport", {}).get("bus", {}) if isinstance(cfg.get("transport"), dict) else {}
+    interval = max(5, int(bus.get("poll_seconds", 30)))
+    stamp = root / STATE_DIR / "bus-last-fetch"
+    try:
+        if stamp.exists() and time.time() - stamp.stat().st_mtime < interval:
+            return
+    except OSError:
+        pass
+    git("fetch", "-q", "origin", _bus_branch(cfg), cwd=code, check=False, timeout=30)
+    try:
+        stamp.write_text(str(time.time()), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _bus_messages(root: Path, cfg: dict) -> list[dict]:
+    ref = _bus_ref(root, cfg)
+    if not ref:
+        return []
+    code = Path(cfg["code_root"])
+    names = git("ls-tree", "-r", "--name-only", ref, "messages/", cwd=code, check=False).stdout.splitlines()
+    out = []
+    for name in names:
+        if not name.endswith(".json"):
+            continue
+        proc = git("show", "%s:%s" % (ref, name), cwd=code, check=False)
+        try:
+            data = json.loads(proc.stdout)
+        except ValueError:
+            continue
+        if isinstance(data, dict) and data.get("id"):
+            out.append(data)
+    return out
+
+
+def _bus_import(root: Path, cfg: dict) -> int:
+    if not _bus_enabled(cfg):
+        return 0
+    _bus_fetch(root, cfg)
+    count = 0
+    for msg in _bus_messages(root, cfg):
+        for target in msg.get("to") or []:
+            target = _safe_agent(str(target))
+            path = _inbox_dir(root, target) / ("%s.json" % msg["id"])
+            if path.exists():
+                continue
+            write_json(path, msg)
+            count += 1
+    return count
+
+
+def cmd_bus(args) -> int:
+    root, cfg = load_config(args)
+    if args.action == "log":
+        messages = _bus_messages(root, cfg)
+        for msg in messages:
+            print("%s\t%s\t%s\t%s\t%s" % (
+                msg.get("id"), msg.get("at"), msg.get("from"),
+                msg.get("type"), ",".join(msg.get("to") or [])))
+        return 0
+    if args.action == "show":
+        if not args.id:
+            raise ToolError("用法: bus show <id>", 2)
+        for msg in _bus_messages(root, cfg):
+            if str(msg.get("id")) == args.id:
+                print(json.dumps(msg, ensure_ascii=False, indent=2))
+                return 0
+        print("NOT_FOUND %s" % args.id)
+        return 3
+    raise ToolError("未知 bus 操作: %s" % args.action, 2)
+
+
+def _mqtt_config(cfg: dict) -> dict | None:
+    mqtt = cfg.get("mqtt") if isinstance(cfg.get("mqtt"), dict) else {}
+    if not mqtt.get("enabled") or not str(mqtt.get("host") or "").strip():
+        return None
+    return mqtt
+
+
+def _project_ok(cfg: dict) -> bool:
+    try:
+        info = _project_identity(Path(cfg["code_root"]))
+    except ToolError:
+        return False
+    return str(cfg.get("project_id") or "") == info["project_id"]
+
+
+def _load_paho():
+    vendor = Path(__file__).resolve().parent.parent / "vendor"
+    if str(vendor) not in sys.path:
+        sys.path.insert(0, str(vendor))
+    import paho.mqtt.client as mqtt
+    return mqtt
+
+
+def _mqtt_topic(cfg: dict, agent: str, suffix: str) -> str:
+    mqtt = cfg.get("mqtt") or {}
+    prefix = str(mqtt.get("topic_prefix") or "aw/v1").strip("/")
+    project = str(cfg.get("project_id") or "")
+    return "%s/%s/agent/%s/%s" % (prefix, project, agent, suffix)
+
+
+def _mqtt_client(cfg: dict, suffix: str):
+    mqtt = _load_paho()
+    m = cfg.get("mqtt") or {}
+    client_id = str(m.get("client_id") or "").strip()
+    if not client_id:
+        client_id = "aw-%s-%s-%s" % (
+            cfg.get("project_id", ""), socket.gethostname(), suffix)
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id)
+    username = str(m.get("username") or "").strip()
+    password = os.environ.get(str(m.get("password_env") or "AW_MQTT_PASSWORD"), "")
+    if username:
+        client.username_pw_set(username, password or None)
+    if m.get("tls", True):
+        ca = str(m.get("ca_file") or "").strip()
+        if ca:
+            client.tls_set(ca_certs=ca)
+        else:
+            client.tls_set()
+    return client
+
+
+def _mqtt_connect(cfg: dict, suffix: str = "client"):
+    m = cfg.get("mqtt") or {}
+    client = _mqtt_client(cfg, suffix)
+    client.connect(str(m["host"]), int(m.get("port", 8883)),
+                   int(m.get("keepalive", 30)))
+    client.loop_start()
+    return client
+
+
+def _mqtt_publish_message(cfg: dict, msg: dict, bus_sha: str = "") -> None:
+    mqtt = _load_paho()
+    client = _mqtt_connect(cfg, "send-%d" % os.getpid())
+    try:
+        payload = dict(msg)
+        payload["project"] = cfg.get("project_id", "")
+        payload["bus_sha"] = bus_sha
+        for target in msg.get("to") or []:
+            info = client.publish(_mqtt_topic(cfg, str(target), "inbox"),
+                                  json.dumps(payload, ensure_ascii=False),
+                                  qos=1, retain=False)
+            info.wait_for_publish(timeout=5)
+    finally:
+        try:
+            client.disconnect()
+        except Exception:
+            pass
+        client.loop_stop()
+
+
+def _publish_presence(root: Path, cfg: dict, client) -> None:
+    folder = root / STATE_DIR / "presence"
+    if not folder.is_dir():
+        return
+    for path in folder.glob("*.json"):
+        data = read_json(path, None)
+        if not isinstance(data, dict) or not data.get("agent"):
+            continue
+        payload = dict(data)
+        payload["project"] = cfg.get("project_id", "")
+        payload["ts"] = _now()
+        payload["ttl_s"] = 90
+        client.publish(_mqtt_topic(cfg, str(data["agent"]), "presence"),
+                       json.dumps(payload, ensure_ascii=False),
+                       qos=1, retain=True)
+
+
+def _start_mqtt_bridge(root: Path, cfg: dict):
+    m = cfg.get("mqtt") or {}
+    client = _mqtt_client(cfg, "watch")
+    state_lock = threading.Lock()
+
+    def on_connect(client, userdata, flags, reason_code, properties):
+        topic = "%s/%s/agent/+/inbox" % (
+            str(m.get("topic_prefix") or "aw/v1").strip("/"),
+            cfg.get("project_id", ""))
+        client.subscribe(topic, qos=1)
+
+    def on_message(client, userdata, message):
+        try:
+            data = json.loads(message.payload.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return
+        if data.get("project") and data["project"] != cfg.get("project_id"):
+            return
+        mid = str(data.get("id") or "")
+        if not mid:
+            return
+        with state_lock:
+            for target in data.get("to") or []:
+                target = _safe_agent(str(target))
+                path = _inbox_dir(root, target) / ("%s.json" % mid)
+                if not path.exists():
+                    write_json(path, data)
+            _scan_wake(root)
+
+    client.on_connect = on_connect
+    client.on_message = on_message
+    client.connect(str(m["host"]), int(m.get("port", 8883)),
+                   int(m.get("keepalive", 30)))
+    client.loop_start()
+    _publish_presence(root, cfg, client)
+    return client
+
 def _send_local(root: Path, ident: dict, to: list[str], kind: str, body: str,
-                expect: str, subject: str = "") -> str:
-    mid = secrets.token_hex(4)
+                expect: str, subject: str = "", mid: str | None = None) -> str:
+    mid = mid or secrets.token_hex(4)
     at = _now()
     for target in to:
         target = _safe_agent(target)
@@ -900,7 +1211,7 @@ def _send_local(root: Path, ident: dict, to: list[str], kind: str, body: str,
 
 
 def cmd_msg(args) -> int:
-    root, _cfg = load_config(args)
+    root, cfg = load_config(args)
     ident = _identity(args)
     _record_session(root, ident)
     if args.action == "send":
@@ -911,7 +1222,39 @@ def cmd_msg(args) -> int:
         if not body:
             raise ToolError("--body 不能为空", 2)
         expect = args.expect or _default_expect(args.type)
-        mid = _send_local(root, ident, to, args.type, body, expect, args.subject or "")
+        mid = secrets.token_hex(4)
+        _send_local(root, ident, to, args.type, body, expect, args.subject or "", mid=mid)
+        transport = cfg.get("transport", {}) if isinstance(cfg.get("transport"), dict) else {}
+        mode = str(transport.get("mode") or "auto")
+        mqtt_cfg = _mqtt_config(cfg)
+        if mode == "mqtt" and not mqtt_cfg:
+            raise ToolError("transport.mode=mqtt，但 mqtt 未配置", 2)
+        wire_msg = {
+            "id": mid, "project": cfg.get("project_id", ""),
+            "from": ident["agent_id"], "to": to, "at": _now(),
+            "type": args.type, "expect": expect,
+            "subject": args.subject or "", "body": body,
+        }
+        bus_sha = ""
+        if _bus_enabled(cfg) and (mode in ("bus", "auto") or transport.get("audit_bus", True)):
+            try:
+                bus_sha = _bus_write(root, cfg, wire_msg)
+                _bus_push(root, cfg)
+            except ToolError as exc:
+                print("warn: bus 写入失败，消息仅本地可见: %s" % exc, file=sys.stderr)
+        if mqtt_cfg and mode in ("mqtt", "auto"):
+            if not _project_ok(cfg):
+                if mode == "mqtt":
+                    raise ToolError("project_id 与 git remote 不一致，拒绝 MQTT", 1)
+                print("warn: project_id 不一致，跳过 MQTT，已写 bus", file=sys.stderr)
+            else:
+                try:
+                    _mqtt_publish_message(cfg, wire_msg, bus_sha)
+                except Exception as exc:
+                    if mode == "mqtt":
+                        print("MQTT 发送失败: %s" % exc, file=sys.stderr)
+                        return 1
+                    print("warn: MQTT 发送失败，已降级 bus: %s" % exc, file=sys.stderr)
         print("SENT %s" % mid)
         return 0
     if args.action == "inbox":
@@ -1096,6 +1439,11 @@ def _watch_stop(root: Path) -> int:
 
 def _run_watch_once(root: Path, args, seed_read: bool = False) -> int:
     _update_presence(root)
+    _root_cfg = load_config(args)[1]
+    try:
+        _bus_import(root, _root_cfg)
+    except ToolError as exc:
+        print("warn: bus 同步失败: %s" % exc, file=sys.stderr)
     events = _scan_wake(root, seed_read=seed_read)
     if args.json:
         for event in events:
@@ -1119,7 +1467,7 @@ def _run_watch_once(root: Path, args, seed_read: bool = False) -> int:
 
 
 def cmd_watch(args) -> int:
-    root, _cfg = load_config(args)
+    root, cfg = load_config(args)
     if args.status:
         return _watch_status(root)
     if args.stop:
@@ -1165,25 +1513,70 @@ def cmd_watch(args) -> int:
                 return 0
         print("WATCH_START_FAILED 见 %s" % err, file=sys.stderr)
         return 1
+    transport = cfg.get("transport", {}) if isinstance(cfg.get("transport"), dict) else {}
+    mode = str(transport.get("mode") or "auto")
+    mqtt_cfg = _mqtt_config(cfg)
+    if mode == "mqtt" and not mqtt_cfg:
+        raise ToolError("transport.mode=mqtt，但 mqtt 未配置", 2)
     if args.once:
-        return _run_watch_once(root, args, seed_read=True)
+        client = None
+        if mqtt_cfg and mode in ("mqtt", "auto") and _project_ok(cfg):
+            try:
+                client = _start_mqtt_bridge(root, cfg)
+            except Exception as exc:
+                if mode == "mqtt":
+                    print("MQTT 连接失败: %s" % exc, file=sys.stderr)
+                    return 1
+                print("warn: MQTT 连接失败，使用 bus: %s" % exc, file=sys.stderr)
+        result = _run_watch_once(root, args, seed_read=True)
+        if client is not None:
+            try:
+                client.disconnect()
+                client.loop_stop()
+            except Exception:
+                pass
+        return result
     state_path = _watch_state_path(root)
     (root / STATE_DIR / "watch.stop").unlink(missing_ok=True)
     state = read_json(state_path, {})
     write_json(state_path, {"pid": os.getpid(), "started_at": _now(),
                             "heartbeat": time.time(), "interval": args.interval})
-    _run_watch_once(root, args, seed_read=True)
+    client = None
+    if mqtt_cfg and mode in ("mqtt", "auto"):
+        if not _project_ok(cfg):
+            if mode == "mqtt":
+                print("project_id 与 git remote 不一致，拒绝 MQTT", file=sys.stderr)
+                return 1
+            print("warn: project_id 不一致，使用 bus", file=sys.stderr)
+        else:
+            try:
+                client = _start_mqtt_bridge(root, cfg)
+            except Exception as exc:
+                if mode == "mqtt":
+                    print("MQTT 连接失败: %s" % exc, file=sys.stderr)
+                    return 1
+                print("warn: MQTT 连接失败，使用 bus: %s" % exc, file=sys.stderr)
     try:
+        _run_watch_once(root, args, seed_read=True)
         while True:
             time.sleep(max(1, args.interval))
             if (root / STATE_DIR / "watch.stop").exists():
                 (root / STATE_DIR / "watch.stop").unlink(missing_ok=True)
                 return 0
             _run_watch_once(root, args)
+            if client is not None:
+                _publish_presence(root, cfg, client)
             write_json(state_path, {"pid": os.getpid(), "started_at": state.get("started_at") or _now(),
                                     "heartbeat": time.time(), "interval": args.interval})
     except KeyboardInterrupt:
         return 0
+    finally:
+        if client is not None:
+            try:
+                client.disconnect()
+                client.loop_stop()
+            except Exception:
+                pass
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1201,6 +1594,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--worktree-root", default=None)
     p_init.add_argument("--branch-prefix", default="feature/")
     p_init.add_argument("--demand-dir", default="demands")
+    p_init.add_argument("--transport", choices=["auto", "mqtt", "bus", "local"], default="auto")
     p_init.add_argument("--mqtt-host", default="", help="MQTT broker 主机；省略=仅本地")
     p_init.add_argument("--mqtt-port", type=int, default=8883)
     p_init.add_argument("--mqtt-no-tls", action="store_true", help="不使用 TLS（不推荐）")
@@ -1240,6 +1634,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_m.add_argument("--timeout", type=int, default=120)
     p_m.add_argument("--json", action="store_true")
     p_m.set_defaults(func=cmd_msg)
+
+    p_bus = sub.add_parser("bus", help="Git bus 审计")
+    p_bus.add_argument("action", choices=["log", "show"])
+    p_bus.add_argument("id", nargs="?", default="")
+    p_bus.set_defaults(func=cmd_bus)
 
     p_project = sub.add_parser("project", help="项目身份（MQTT 用）")
     p_project.add_argument("action", choices=["id", "alias", "check"])

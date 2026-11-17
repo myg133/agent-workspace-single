@@ -59,6 +59,7 @@ python scripts/aw_single.py claim list
 python scripts/aw_single.py claim release REQ-001
 python scripts/aw_single.py claim doctor
 python scripts/aw_single.py project check
+python scripts/aw_single.py bus log
 
 python scripts/aw_single.py msg send --to ba-1 --type question --body "ping"
 python scripts/aw_single.py msg inbox

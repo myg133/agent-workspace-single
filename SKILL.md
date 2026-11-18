@@ -1,9 +1,9 @@
 ---
 name: agent-workspace-single
-description: 单机、双仓（代码仓库 + 文档仓库）、传统分支模型下的轻量多 Agent 协作层。用于已有项目不想改造成 workspace 布局，但需要 WIP=1、feature worktree 隔离、认领和交接的场景。不适用于跨机协作、需要 bus 消息或 workspace 分支模型的场景。
+description: 单机、双仓（代码仓库 + 文档仓库）、传统分支模型下的轻量多 Agent 协作层。用于已有项目不想改造成 workspace 布局，但需要 WIP=1、feature worktree 隔离、认领和交接的场景。单机消息、本地 inbox、可选 MQTT 已支持；不适用于需要 workspace 分支模型的场景。
 metadata:
   short-description: 单机双仓 Agent 协作
-  version: 0.1.0
+  version: 0.2.0
 ---
 
 # agent-workspace-single
@@ -26,7 +26,6 @@ metadata:
 ## 何时不用
 
 - 需要跨机共享 claim；
-- 需要 bus 消息历史；
 - 需要 workspace 的 `code/BA/Deploy` 布局；
 - 需要完整 audit/verify/upgrade。
 
@@ -36,6 +35,13 @@ metadata:
 - `references/roles/ba.md`
 - `references/roles/dev.md`
 - `references/roles/qa.md`
+
+## 测试预算（默认）
+
+- 每个任务新增测试 ≤3；Bug 修复 1 条回归；重构 0 条；
+- Dev 默认只跑 fast / related，full 交给 QA / CI；
+- 测试按风险测，不按覆盖率测；停止条件、失败分诊、测试审计见
+  `references/testing.md`。
 
 ## 依赖
 
@@ -48,6 +54,7 @@ MQTT 库已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要安装依�
 - `references/setup.md`
 - `references/single-profile.md`
 - `references/workflow.md`
+- `references/testing.md`
 - `references/layout.md`
 - `references/omp.md`
 - `references/dsh.md`

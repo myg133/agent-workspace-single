@@ -23,7 +23,9 @@
 
 ## 3. 实现
 
-- 先写测试，再写实现；
+- 先按 [testing.md](../testing.md) 做风险判断：这次最可能坏什么、现有测试能否覆盖；
+- 只为改动面 + 可能回归的边界写 1–3 条测试；不追求每条 AC 都自动化；
+- 核心算法、并发、权限、Bug 回归可先写测试；CRUD / 配置 / UI 不强制 TDD；
 - 小步提交，信息带 REQ；
 - 更新本 worktree 的 `CHANGELOG.md`（若项目有）；
 - 中间产物放 `.local/`，不提交。
@@ -33,11 +35,11 @@
 必须通过：
 
 ```text
-1. 追溯矩阵：AC → 代码 → 测试
-2. 单元测试全绿（不依赖数据库/外部服务）
+1. 追溯矩阵：AC → 代码 → 测试 / 手工验证 / 未验证
+2. fast lane 单测全绿；related 测试通过
 3. lint / 类型检查
 4. 无调试输出 / TODO / 密钥
-5. 覆盖率（若项目有要求）
+5. 测试预算：新增 ≤3；未跑 full / 集成项写明命令、原因、状态
 6. 写 feature-meta/verification-report.md（含 Handoff）
 ```
 
@@ -53,7 +55,8 @@
 REQ-001 开发完成
 - branch: feature/REQ-001 @ <sha>
 - 改动: N 文件 / +X -Y
-- 快速门禁: 单测 x/x，lint PASS
+- 快速门禁: fast x/x，related x/x，lint PASS
+- 测试预算: 新增 N 条（上限 3）；full 未跑（CI）
 - 异步验证: 集成待执行 / E2E 未跑
 - 风险: ...
 - Handoff: feature-meta/verification-report.md
@@ -73,4 +76,7 @@ REQ-001 开发完成
 - 不直接改 docs；
 - 不 merge / rebase 别人的分支；
 - 不扩大 scope；
-- 不提交 secrets / 大二进制。
+- 不提交 secrets / 大二进制；
+- **不默认跑全量测试**；fast / related 通过即停，full 交给 QA/CI；
+- **不修与本次 diff 无关的失败**；记录 `pre-existing` 后继续；
+- 测试预算与停止条件见 [testing.md](../testing.md)。

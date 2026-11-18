@@ -32,17 +32,31 @@
 
 1. 只读 docs；
 2. 在 worktree 实现；
-3. 跑提交前快速门禁；
-4. 写 `feature-meta/verification-report.md`；
-5. 发 handoff，退出；
-6. 不等 QA，不修改 docs 的 `status.md`。
+3. 按 `testing.md` 的预算写 1–3 条目标/回归测试；
+4. 跑 fast / related 快速门禁（不默认跑 full）；
+5. 写 `feature-meta/verification-report.md`；
+6. 发 handoff，退出；
+7. 不等 QA，不修改 docs 的 `status.md`。
 
 ## 4. QA
 
 1. 只读 docs + worktree；
-2. 跑验证；
-3. 报告交 BA；
-4. 不提交、不改状态。
+2. 先 related；full 只在 merge 前跑一次；
+3. 审查测试有效性 + 测试套件成本（慢/重复/实现耦合/flaky）；
+4. 报告交 BA；
+5. 不提交、不改状态、不替 Dev 补测试。
+
+## 4.1 测试克制
+
+测试按风险测，不按覆盖率测。默认预算：
+
+- 每个任务新增测试 ≤3；Bug 修复 1 条回归；重构 0 条；
+- Dev 只跑 fast / related；full 交给 QA / CI；
+- 不测未改动代码、第三方库、私有实现、日志/文案/格式；
+- 目标测试 + related 通过即停止，不补覆盖率；
+- 无关失败记录 `pre-existing`，不修。
+
+完整规则、失败分诊、测试审计和度量见 [testing.md](testing.md)。
 
 ## 5. 返工
 

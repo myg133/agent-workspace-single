@@ -15,6 +15,17 @@ MVP 已实现：`scripts/aw_single.py`。
 
 MQTT 依赖已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要 `pip install`。
 
+## 测试预算
+
+默认按风险测，不按覆盖率测：
+
+- 每个任务新增测试 ≤3；Bug 修复 1 条回归；重构 0 条；
+- Dev 只跑 fast / related；full 交给 QA / CI；
+- 不测未改动代码、第三方库、私有实现、日志/文案/格式；
+- 目标测试 + related 通过即停止，不补覆盖率。
+
+完整规则见 [references/testing.md](references/testing.md)。
+
 ## MQTT 配置
 
 MQTT 默认关闭。需要连接时，在 `.aw/config.json` 写：
@@ -46,7 +57,7 @@ aw_single.py init --root . \
   --mqtt-username aw --mqtt-ca D:/certs/ca.pem
 ```
 
-密码通过 `AW_MQTT_PASSWORD` 提供，不写进配置。MQTT 客户端尚未接入 watcher，当前只完成配置契约。
+密码通过 `AW_MQTT_PASSWORD` 提供，不写进配置。watcher 已接入 MQTT 订阅/发布与 presence；没有 broker 时退化本地 inbox + bus。
 
 ```bash
 python scripts/aw_single.py init --root . \
@@ -116,6 +127,7 @@ python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
 
 - [单机 profile](references/single-profile.md)
 - [工作流](references/workflow.md)
+- [测试克制](references/testing.md)
 - [目录布局](references/layout.md)
 - [Setup / 环境变量](references/setup.md)
 - [omp 唤醒插件](references/omp.md)

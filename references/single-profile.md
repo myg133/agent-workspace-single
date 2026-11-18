@@ -168,6 +168,9 @@ docs 仓库负责：
 | `test-cases/` | QA 产出，BA 提交 |
 | 其他 | 只读 |
 
+`test-cases/` 只放**风险用例**：每个 AC 最多 1 条主路径 + 必要边界；低风险 AC 可标手工验证。
+默认预算见 [testing.md](testing.md)。
+
 Dev/QA 只读 docs，不直接改状态。
 
 feature worktree 的 `feature-meta/manifest.json` 增加：

@@ -22,8 +22,11 @@
 ## 3. 接需求
 
 1. 在 docs 创建 `demands/REQ-xxx/`；
-2. 写 `demand.md` / `acceptance.md` / `status.md`；
-3. 需要测试用例时，让 QA 先出内容，由 BA 提交；
+2. 写 `demand.md` / `acceptance.md` / `status.md`（acceptance 模板见 `templates/acceptance.md.tpl`，带风险/验证层级/自动化）；
+3. 需要测试用例时，让 QA 先出**风险用例**，由 BA 提交：
+   - 每个 AC 最多 1 条主路径 + 必要边界；
+   - 低风险 AC 标“手工验证 / 暂不自动化”，写清理由；
+   - 预算见 [testing.md](../testing.md)。
 4. `aw_single.py queue add REQ-xxx`；
 5. `aw_single.py claim next`；
 6. 把 worktree 路径、docs 路径、base sha 交给 Dev。
@@ -47,8 +50,9 @@ briefing 必须自包含：
 需求：REQ-001
 代码仓库：<code_root>
 worktree：<worktree_root>/REQ-001
-docs：<docs_root>/demands/REQ-001/
+docs：<docs_root>/demands/REQ-001/（含风险用例 test-cases/）
 base：develop@<sha>
+测试预算：新增 ≤3；默认只跑 fast / related；full 不跑（交 QA/CI）
 约束：只改 worktree；不改 docs/status/claim；handoff 后退出
 ```
 

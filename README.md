@@ -128,6 +128,7 @@ python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
 - [单机 profile](references/single-profile.md)
 - [工作流](references/workflow.md)
 - [测试克制](references/testing.md)
+- [会话与子 Agent 预算](references/session-budget.md)
 - [目录布局](references/layout.md)
 - [Setup / 环境变量](references/setup.md)
 - [omp 唤醒插件](references/omp.md)

@@ -76,3 +76,5 @@ Post-merge 可后续加；首版不强制。
 - **不替 Dev 补测试**；不因总覆盖率不足退回，除非关键 AC 完全没有任何验证；
 - **full 只在 merge 前跑一次**；无关失败标 `pre-existing`，不要求 Dev 修；
 - 测试预算与停止条件见 [testing.md](../testing.md)。
+- 验证会话默认 ≤30 轮 / 6 万上下文；只读 diff、AC、关键文件，不要重扫全仓库。
+- 会话与子 Agent 预算见 [session-budget.md](../session-budget.md)。

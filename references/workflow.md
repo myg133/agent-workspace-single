@@ -58,6 +58,14 @@
 
 完整规则、失败分诊、测试审计和度量见 [testing.md](testing.md)。
 
+## 4.2 会话与子 Agent 预算
+
+- 主会话默认 ≤60 轮 / 8 万上下文；到阈值先 handoff，再开新会话；
+- 一个 REQ 最多 2–3 个子 Agent；**没有 diff 预期的任务不 spawn**；
+- 探索 / 文档 / status 用低成本模型，复杂实现 / 关键 review 才用强模型；
+- 单会话只做一个阶段，不要从探索一路做到上线；
+- 完整规则、会话任务卡、度量与反模式见 [session-budget.md](session-budget.md)。
+
 ## 5. 返工
 
 - BA 在 docs 的 `status.md` 写 `return_reason`；

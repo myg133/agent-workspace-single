@@ -53,6 +53,8 @@ worktree：<worktree_root>/REQ-001
 docs：<docs_root>/demands/REQ-001/（含风险用例 test-cases/）
 base：develop@<sha>
 测试预算：新增 ≤3；默认只跑 fast / related；full 不跑（交 QA/CI）
+会话任务卡：按 templates/session-card.md.tpl 填预算/允许读/退出条件
+子 Agent：最多 2 个；没有 diff 预期的任务不 spawn
 约束：只改 worktree；不改 docs/status/claim；handoff 后退出
 ```
 

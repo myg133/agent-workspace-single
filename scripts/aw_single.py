@@ -72,12 +72,15 @@ def _win_no_window() -> dict:
 
 def git(*args: str, cwd: Path | str, check: bool = True,
         timeout: float | None = None) -> subprocess.CompletedProcess:
-    proc = subprocess.run(
-        ["git", "-c", "core.quotepath=false", *args],
-        cwd=str(cwd), capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=timeout,
-        **_win_no_window(),
-    )
+    try:
+        proc = subprocess.run(
+            ["git", "-c", "core.quotepath=false", *args],
+            cwd=str(cwd), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout,
+            **_win_no_window(),
+        )
+    except subprocess.TimeoutExpired:
+        raise ToolError("git %s 超时（%ss）" % (" ".join(args), timeout), 1)
     if check and proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()
         raise ToolError("git %s 失败: %s" % (" ".join(args), detail), 1)
@@ -1707,18 +1710,51 @@ def cmd_watch(args) -> int:
                     print("MQTT 连接失败: %s" % exc, file=sys.stderr)
                     return 1
                 print("warn: MQTT 连接失败，使用 bus: %s" % exc, file=sys.stderr)
+    error_streak = 0
+    last_error = ""
+
+    def _heartbeat() -> None:
+        try:
+            write_json(state_path, {
+                "pid": os.getpid(),
+                "started_at": state.get("started_at") or _now(),
+                "heartbeat": time.time(),
+                "interval": args.interval,
+            })
+        except OSError as exc:
+            print("warn: 写 watch 心跳失败: %s" % exc, file=sys.stderr)
+
+    def _run_cycle(seed: bool = False) -> None:
+        nonlocal error_streak, last_error
+        try:
+            _run_watch_once(root, args, seed_read=seed)
+            error_streak = 0
+            last_error = ""
+        except Exception as exc:
+            error_streak += 1
+            msg = "%s: %s" % (type(exc).__name__, exc)
+            if msg != last_error or error_streak in (1, 10, 100):
+                import traceback
+                traceback.print_exc()
+                print("warn: watch cycle failed (#%d): %s"
+                      % (error_streak, msg), file=sys.stderr)
+            last_error = msg
+        finally:
+            _heartbeat()
+
     try:
-        _run_watch_once(root, args, seed_read=True)
+        _run_cycle(seed=True)
         while True:
             time.sleep(max(1, args.interval))
             if (root / STATE_DIR / "watch.stop").exists():
                 (root / STATE_DIR / "watch.stop").unlink(missing_ok=True)
                 return 0
-            _run_watch_once(root, args)
+            _run_cycle()
             if client is not None:
-                _publish_presence(root, cfg, client)
-            write_json(state_path, {"pid": os.getpid(), "started_at": state.get("started_at") or _now(),
-                                    "heartbeat": time.time(), "interval": args.interval})
+                try:
+                    _publish_presence(root, cfg, client)
+                except Exception as exc:
+                    print("warn: presence 发布失败: %s" % exc, file=sys.stderr)
     except KeyboardInterrupt:
         return 0
     finally:

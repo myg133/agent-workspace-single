@@ -102,6 +102,15 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(cfg["mqtt"]["password_env"], "AW_MQTT_PASSWORD")
         self.assertNotIn("password", cfg["mqtt"])
 
+    def test_git_timeout_raises_tool_error(self):
+        spec = importlib.util.spec_from_file_location("aw_single_timeout", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with self.assertRaises(module.ToolError) as ctx:
+            module.git("-c", "alias.slp=!sleep 5", "slp",
+                       cwd=self.tmp, timeout=0.2)
+        self.assertIn("超时", str(ctx.exception))
+
     def test_vendored_paho_import(self):
         vendor = str(ROOT / "vendor")
         sys.path.insert(0, vendor)

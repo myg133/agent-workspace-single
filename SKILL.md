@@ -3,7 +3,7 @@ name: agent-workspace-single
 description: 单机、双仓（代码仓库 + 文档仓库）、传统分支模型下的轻量多 Agent 协作层。用于已有项目不想改造成 workspace 布局，但需要 WIP=1、feature worktree 隔离、认领和交接的场景。单机消息、本地 inbox、可选 MQTT 已支持；不适用于需要 workspace 分支模型的场景。
 metadata:
   short-description: 单机双仓 Agent 协作
-  version: 0.3.0
+  version: 0.4.0
 ---
 
 # agent-workspace-single
@@ -50,6 +50,20 @@ metadata:
 - 探索 / 文档 / status 用低成本模型，复杂实现 / 关键 review 才用强模型；
 - 完整规则、会话任务卡、度量与反模式见 `references/session-budget.md`。
 
+## 换班（handoff / resume）
+
+常驻 BA / Planner 换班不要新建 `agent_id`：
+
+~~~bash
+aw_single.py handoff --note "换班" --next-step "..."
+# 新会话：同一个 AW_AGENT_ID + 显式 AW_SESSION_ID
+aw_single.py whoami
+aw_single.py resume
+~~~
+
+handoff 保留 claim、记录未读/待回复消息、重置 wake-seen；resume 不消费消息。
+详见 `references/handoff.md`。
+
 ## 依赖
 
 MQTT 库已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要安装依赖。
@@ -63,6 +77,7 @@ MQTT 库已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要安装依�
 - `references/workflow.md`
 - `references/testing.md`
 - `references/session-budget.md`
+- `references/handoff.md`
 - `references/layout.md`
 - `references/omp.md`
 - `references/dsh.md`

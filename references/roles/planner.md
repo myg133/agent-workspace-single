@@ -12,7 +12,17 @@ Planner 最容易变成"开一整天"的会话：读 roadmap、刷 backlog、等
 - 一个会话只解决一个规划问题，不要边规划边实现；
 - 没有新决策就结束，不要"挂着等消息"。
 
-完整预算见 [session-budget.md](../session-budget.md)。
+换班时：
+
+~~~bash
+aw_single.py handoff --note "Planner 换班" --next-step "..."
+# 新会话同一个 AW_AGENT_ID
+aw_single.py resume
+~~~
+
+不要新建 agent_id；handoff 会保留未处理消息和 claim。
+
+完整预算见 [session-budget.md](../session-budget.md)，换班协议见 [handoff.md](../handoff.md)。
 
 ## 1. 何时启用
 

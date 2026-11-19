@@ -64,7 +64,16 @@
 - 一个 REQ 最多 2–3 个子 Agent；**没有 diff 预期的任务不 spawn**；
 - 探索 / 文档 / status 用低成本模型，复杂实现 / 关键 review 才用强模型；
 - 单会话只做一个阶段，不要从探索一路做到上线；
-- 完整规则、会话任务卡、度量与反模式见 [session-budget.md](session-budget.md)。
+- 常驻 BA / Planner 换班用：
+
+  ~~~bash
+  aw_single.py handoff --note "换班" --next-step "..."
+  # 新会话：同一个 AW_AGENT_ID + 显式 AW_SESSION_ID
+  aw_single.py whoami
+  aw_single.py resume
+  ~~~
+
+- 完整规则、会话任务卡、度量与反模式见 [session-budget.md](session-budget.md)，换班协议见 [handoff.md](handoff.md)。
 
 ## 5. 返工
 

@@ -119,6 +119,57 @@ class SingleCase(unittest.TestCase):
                              .read_text(encoding="utf-8"))
         self.assertEqual(session["session_id"], "sess-1")
 
+    def test_handoff_and_resume(self):
+        send_env = dict(self.env)
+        send_env.update({"AW_AGENT_ID": "ba-2", "AW_SESSION_ID": "sess-2"})
+        sent = run(["msg", "send", "--to", "ba-1", "--type", "question",
+                    "--body", "handoff-test"], self.tmp, send_env)
+        self.assertEqual(sent.returncode, 0, sent.stderr)
+
+        old = run(["handoff", "--note", "shift end",
+                   "--next-step", "answer the question", "--json"],
+                  self.tmp, self.env)
+        self.assertEqual(old.returncode, 0, old.stderr)
+        data = json.loads(old.stdout)
+        self.assertEqual(data["agent_id"], "ba-1")
+        self.assertGreaterEqual(len(data["unresolved"]), 1)
+        handoff_path = self.tmp / ".aw" / "handoff" / "ba-1.json"
+        self.assertTrue(handoff_path.exists())
+        session = json.loads((self.tmp / ".aw" / "sessions" / "ba-1.json")
+                             .read_text(encoding="utf-8"))
+        self.assertEqual(session.get("status"), "offline")
+
+        new_env = dict(self.env)
+        new_env["AW_SESSION_ID"] = "sess-1-new"
+        new = run(["resume", "--json"], self.tmp, new_env)
+        self.assertEqual(new.returncode, 0, new.stderr)
+        resumed = json.loads(new.stdout)
+        self.assertEqual(resumed["resumed_session_id"], "sess-1-new")
+        self.assertTrue(resumed["unresolved"])
+
+        inbox = run(["msg", "inbox", "--json"], self.tmp, new_env)
+        self.assertEqual(inbox.returncode, 0, inbox.stderr)
+        messages = json.loads(inbox.stdout)
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["body"], "handoff-test")
+
+    def test_handoff_keeps_claim(self):
+        self.assertEqual(run(["queue", "add", "REQ-001", "--title", "x"],
+                             self.tmp, self.env).returncode, 0)
+        claimed = run(["claim", "next"], self.tmp, self.env)
+        self.assertEqual(claimed.returncode, 0, claimed.stderr)
+        out = run(["handoff", "--json"], self.tmp, self.env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads(out.stdout)
+        self.assertEqual(data["current_req"], "REQ-001")
+        claims = run(["claim", "list"], self.tmp, self.env)
+        self.assertIn("REQ-001", claims.stdout)
+
+    def test_resume_without_handoff(self):
+        out = run(["resume", "--json"], self.tmp, self.env)
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("NO_HANDOFF", out.stdout)
+
     def test_queue_and_claim_next(self):
         self.assertEqual(run(["queue", "add", "REQ-001", "--title", "x"],
                              self.tmp).returncode, 0)

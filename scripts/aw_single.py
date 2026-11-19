@@ -787,6 +787,146 @@ def cmd_init(args) -> int:
     return 0
 
 
+HANDOFF_VERSION = 1
+
+
+def _handoff_path(root: Path, agent: str) -> Path:
+    return root / STATE_DIR / "handoff" / ("%s.json" % agent)
+
+
+def _handoff_message(msg: dict, status: str) -> dict:
+    fields = ("id", "from", "to", "at", "type", "expect", "subject", "ref", "thread")
+    row = {k: msg.get(k) for k in fields if msg.get(k)}
+    row["status"] = status
+    return row
+
+
+def _collect_handoff(root: Path, ident: dict) -> dict:
+    """只读收集交接状态；不推进已读。"""
+    agent = ident["agent_id"]
+    messages = _messages(root, agent)
+    read = _read_ids(root, agent)
+    answered = {m.get("re") for m in messages if m.get("re")}
+    unread_ids = {str(m.get("id")) for m in messages
+                  if m.get("id") and str(m.get("id")) not in read}
+    pending_ids = {
+        str(m.get("id")) for m in messages
+        if m.get("id") and m.get("from") != agent
+        and m.get("expect") in ("ack", "reply")
+        and str(m.get("id")) not in answered
+    }
+    rows = []
+    for m in messages:
+        mid = str(m.get("id") or "")
+        if not mid:
+            continue
+        flags = []
+        if mid in unread_ids:
+            flags.append("unread")
+        if mid in pending_ids:
+            flags.append("pending")
+        if flags:
+            rows.append(_handoff_message(m, "+".join(flags)))
+    rows.sort(key=lambda m: (m.get("at", ""), m.get("id", "")))
+
+    claims = [c for c in _claims(root) if c.get("agent_id") == agent]
+    claim = claims[0] if claims else None
+    public_claim = ({k: v for k, v in claim.items() if k != "_path"}
+                    if claim else None)
+    sess = read_json(root / STATE_DIR / "sessions" / ("%s.json" % agent), {})
+    return {
+        "version": HANDOFF_VERSION,
+        "agent_id": agent,
+        "from_session_id": ident["session_id"],
+        "created_at": _now(),
+        "cwd": str(Path.cwd()),
+        "claim": public_claim,
+        "current_req": (public_claim or {}).get("req", ""),
+        "unread_ids": sorted(unread_ids),
+        "pending_ids": sorted(pending_ids),
+        "unresolved": rows,
+        "session": sess,
+    }
+
+
+def _reset_wake_seen_to_read(root: Path, agent: str) -> None:
+    """让未读消息重新可被唤醒，已读消息不重复叫。"""
+    write_json(_wake_seen_path(root, agent), {
+        "ids": sorted(_read_ids(root, agent))[-2000:],
+    })
+
+
+def cmd_handoff(args) -> int:
+    root, _cfg = load_config(args)
+    ident = _identity(args)
+    _record_session(root, ident)
+    data = _collect_handoff(root, ident)
+    data["reason"] = getattr(args, "note", "") or ""
+    data["next_step"] = getattr(args, "next_step", "") or ""
+    path = _handoff_path(root, ident["agent_id"])
+    write_json(path, data)
+
+    sess_path = root / STATE_DIR / "sessions" / ("%s.json" % ident["agent_id"])
+    sess = read_json(sess_path, {})
+    if sess:
+        sess.update({"status": "offline", "pid": 0,
+                     "ended_at": _now(), "handoff_at": _now()})
+        write_json(sess_path, sess)
+    _reset_wake_seen_to_read(root, ident["agent_id"])
+    _update_presence(root)
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        print("HANDOFF %s" % ident["agent_id"])
+        print("  file      : %s" % path)
+        print("  claim     : %s" % (data["current_req"] or "-"))
+        print("  unresolved: %d（unread %d / pending %d）"
+              % (len(data["unresolved"]), len(data["unread_ids"]),
+                 len(data["pending_ids"])))
+        print("  session   : %s -> offline" % ident["session_id"])
+        print("  next      : 停止本会话；新会话用同一个 AW_AGENT_ID，然后 resume")
+    return 0
+
+
+def cmd_resume(args) -> int:
+    root, _cfg = load_config(args)
+    ident = _identity(args)
+    _record_session(root, ident)
+    path = _handoff_path(root, ident["agent_id"])
+    data = read_json(path, None)
+    if not isinstance(data, dict):
+        print("NO_HANDOFF %s（先运行 handoff）" % ident["agent_id"])
+        return 3
+    if data.get("agent_id") and data["agent_id"] != ident["agent_id"]:
+        print("HANDOFF_MISMATCH 文件属于 %s，当前是 %s"
+              % (data["agent_id"], ident["agent_id"]), file=sys.stderr)
+        return 3
+    data["resumed_at"] = _now()
+    data["resumed_session_id"] = ident["session_id"]
+    write_json(path, data)
+    _reset_wake_seen_to_read(root, ident["agent_id"])
+    _update_presence(root)
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        claim = data.get("claim") or {}
+        print("RESUMED %s" % ident["agent_id"])
+        print("  session   : %s" % ident["session_id"])
+        print("  claim     : %s" % (claim.get("req") or data.get("current_req") or "-"))
+        print("  unresolved: %d" % len(data.get("unresolved") or []))
+        if data.get("reason"):
+            print("  reason    : %s" % data["reason"])
+        if data.get("next_step"):
+            print("  next step : %s" % data["next_step"])
+        ids = [m.get("id") for m in (data.get("unresolved") or []) if m.get("id")]
+        if ids:
+            print("  messages  : %s" % ", ".join(ids[:10]))
+            print("  next      : msg inbox / msg ack（先别清空未处理消息）")
+    return 0
+
+
 def cmd_whoami(args) -> int:
     root, _cfg = load_config(args)
     ident = _identity(args)
@@ -1616,6 +1756,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_who = sub.add_parser("whoami")
     p_who.set_defaults(func=cmd_whoami)
+
+    p_handoff = sub.add_parser("handoff", help="交接当前 agent：写 handoff 文件，保留 claim")
+    p_handoff.add_argument("--note", default="", help="换班原因 / 上下文")
+    p_handoff.add_argument("--next-step", default="", help="下一步")
+    p_handoff.add_argument("--json", action="store_true")
+    p_handoff.set_defaults(func=cmd_handoff)
+
+    p_resume = sub.add_parser("resume", help="新会话恢复：读 handoff，不消费消息")
+    p_resume.add_argument("--json", action="store_true")
+    p_resume.set_defaults(func=cmd_resume)
 
     p_q = sub.add_parser("queue")
     p_q.add_argument("action", choices=["add", "list"])

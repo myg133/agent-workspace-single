@@ -64,6 +64,8 @@ python scripts/aw_single.py init --root . \
   --code-root D:/proj/app --docs-root D:/proj/docs --base-branch develop
 
 python scripts/aw_single.py whoami
+python scripts/aw_single.py handoff --note "换班" --next-step "先处理未读"
+python scripts/aw_single.py resume
 python scripts/aw_single.py queue add REQ-001 --title "登录"
 python scripts/aw_single.py claim next
 python scripts/aw_single.py claim list
@@ -129,6 +131,7 @@ python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
 - [工作流](references/workflow.md)
 - [测试克制](references/testing.md)
 - [会话与子 Agent 预算](references/session-budget.md)
+- [换班协议 handoff / resume](references/handoff.md)
 - [目录布局](references/layout.md)
 - [Setup / 环境变量](references/setup.md)
 - [omp 唤醒插件](references/omp.md)

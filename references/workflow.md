@@ -75,6 +75,14 @@
 
 - 完整规则、会话任务卡、度量与反模式见 [session-budget.md](session-budget.md)，换班协议见 [handoff.md](handoff.md)。
 
+## 4.3 探索权唯一
+
+- BA 只做业务/验收/文档/接口探索；代码探索交给 Dev；
+- 一个任务只有一个代码探索 owner；
+- fresh 子 Agent 默认零上下文，任务卡必须带 evidence（已确认/待验证/不要重读）；
+- QA 验证 diff/AC，不重新探索架构；
+- 规则与模板见 [exploration.md](exploration.md)。
+
 ## 5. 返工
 
 - BA 在 docs 的 `status.md` 写 `return_reason`；

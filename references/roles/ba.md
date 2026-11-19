@@ -12,6 +12,17 @@
 | 不写 | 代码、feature worktree、其他人的需求 |
 | claim | **BA 持有**，Dev 退出不释放 |
 
+## 1.1 探索权
+
+BA 只做**业务探索**：需求、验收、文档、接口、依赖、风险。
+
+- 不深读实现、不画完整调用链；需要实现级理解就交给 Dev；
+- 如果为了写验收必须读代码，只读到“够用”，并写成 evidence；
+- 一个任务里不要出现“BA 深读一遍 + Dev 再读一遍”；
+- 派单时把 evidence 和“不要重读”的文件写进任务卡。
+
+规则见 [exploration.md](../exploration.md)。
+
 ## 2. 启动
 
 1. 确认 `.aw/config.json` 指向正确的 `code_root` / `docs_root`；
@@ -54,6 +65,8 @@ docs：<docs_root>/demands/REQ-001/（含风险用例 test-cases/）
 base：develop@<sha>
 测试预算：新增 ≤3；默认只跑 fast / related；full 不跑（交 QA/CI）
 会话任务卡：按 templates/session-card.md.tpl 填预算/允许读/退出条件
+探索 owner：BA 只做业务探索；代码探索交 Dev
+Evidence：按 templates/exploration-evidence.md.tpl 附已确认/待验证/不要重读
 子 Agent：最多 2 个；没有 diff 预期的任务不 spawn
 换班：handoff 记录未处理消息；新会话同一 AW_AGENT_ID，resume
 约束：只改 worktree；不改 docs/status/claim；handoff 后退出

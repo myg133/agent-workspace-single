@@ -21,7 +21,8 @@
 - 快速门禁是否真的通过；
 - 异步验证是否需要补跑；
 - 代码质量：调试代码、硬编码密钥、未使用依赖；
-- 测试套件成本：慢、重复、实现耦合、flaky（只报告，不修）。
+- 测试套件成本：慢、重复、实现耦合、flaky（只报告，不修）；
+- 验证不是重新探索：先读 evidence + diff，只有高风险/证据冲突才扩大读取。
 
 Post-merge 可后续加；首版不强制。
 
@@ -31,9 +32,10 @@ Post-merge 可后续加；首版不强制。
 1. 读 docs 的 demand / acceptance / test-cases
 2. 读 worktree 的 diff / commit
 3. 逐条 AC 找实现 + 测试证据；关键 AC 必须有测试或明确“未验证”
-4. 跑测试（只读）：先 related；full 只在 merge 前跑一次
-5. 输出 PASS / FAIL / PASS-WITH-RISK
-6. 报告交 BA
+4. 先读 evidence + diff；不要重新探索架构
+5. 跑测试（只读）：先 related；full 只在 merge 前跑一次
+6. 输出 PASS / FAIL / PASS-WITH-RISK
+7. 报告交 BA
 ```
 
 ## 4. 报告格式
@@ -76,5 +78,6 @@ Post-merge 可后续加；首版不强制。
 - **不替 Dev 补测试**；不因总覆盖率不足退回，除非关键 AC 完全没有任何验证；
 - **full 只在 merge 前跑一次**；无关失败标 `pre-existing`，不要求 Dev 修；
 - 测试预算与停止条件见 [testing.md](../testing.md)。
+- 验证不是重新探索：先读 evidence + diff，规则见 [exploration.md](../exploration.md)。
 - 验证会话默认 ≤30 轮 / 6 万上下文；只读 diff、AC、关键文件，不要重扫全仓库。
 - 会话与子 Agent 预算见 [session-budget.md](../session-budget.md)。

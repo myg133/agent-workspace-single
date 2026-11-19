@@ -79,5 +79,6 @@ Post-merge 可后续加；首版不强制。
 - **full 只在 merge 前跑一次**；无关失败标 `pre-existing`，不要求 Dev 修；
 - 测试预算与停止条件见 [testing.md](../testing.md)。
 - 验证不是重新探索：先读 evidence + diff，规则见 [exploration.md](../exploration.md)。
+- 不重新做任务预检；按 BA 的切片 AC 验证。发现切片过大，退回 BA，不自行扩范围。
 - 验证会话默认 ≤30 轮 / 6 万上下文；只读 diff、AC、关键文件，不要重扫全仓库。
 - 会话与子 Agent 预算见 [session-budget.md](../session-budget.md)。

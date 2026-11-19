@@ -23,6 +23,19 @@ BA 只做**业务探索**：需求、验收、文档、接口、依赖、风险�
 
 规则见 [exploration.md](../exploration.md)。
 
+### 任务预检
+
+下派前先判断任务大小：
+
+- 1 个模块、≤5 个文件、1 组 AC → 可直接派；
+- 2–3 个模块 / 接口不清 → 先让 Dev 只读摸清；
+- 跨 3 个以上模块、DB + API + UI、迁移 + 契约 → **必须拆**；
+- 说不出“改哪些文件、怎么验证” → 不派 Dev。
+
+任务卡必须写：切片目标、预期文件、预期 diff、AC 子集、依赖、验证命令、预算、停止条件。
+
+规则见 [task-sizing.md](../task-sizing.md)。
+
 ## 2. 启动
 
 1. 确认 `.aw/config.json` 指向正确的 `code_root` / `docs_root`；
@@ -67,7 +80,8 @@ base：develop@<sha>
 会话任务卡：按 templates/session-card.md.tpl 填预算/允许读/退出条件
 探索 owner：BA 只做业务探索；代码探索交 Dev
 Evidence：按 templates/exploration-evidence.md.tpl 附已确认/待验证/不要重读
-子 Agent：最多 2 个；没有 diff 预期的任务不 spawn
+BA 预检：切片目标 / 预期文件 / 预期 diff / AC 子集 / 预算
+子 Agent：最多 2 个；没有 diff 预期的任务不 spawn；超过切片预算就拆
 换班：handoff 记录未处理消息；新会话同一 AW_AGENT_ID，resume
 约束：只改 worktree；不改 docs/status/claim；handoff 后退出
 ```

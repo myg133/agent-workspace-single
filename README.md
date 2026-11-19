@@ -133,6 +133,7 @@ python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
 - [会话与子 Agent 预算](references/session-budget.md)
 - [换班协议 handoff / resume](references/handoff.md)
 - [探索权唯一与 evidence](references/exploration.md)
+- [任务预检与开工自检](references/task-sizing.md)
 - [目录布局](references/layout.md)
 - [Setup / 环境变量](references/setup.md)
 - [omp 唤醒插件](references/omp.md)

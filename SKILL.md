@@ -3,7 +3,7 @@ name: agent-workspace-single
 description: 单机、双仓（代码仓库 + 文档仓库）、传统分支模型下的轻量多 Agent 协作层。用于已有项目不想改造成 workspace 布局，但需要 WIP=1、feature worktree 隔离、认领和交接的场景。单机消息、本地 inbox、可选 MQTT 已支持；不适用于需要 workspace 分支模型的场景。
 metadata:
   short-description: 单机双仓 Agent 协作
-  version: 0.5.0
+  version: 0.6.0
 ---
 
 # agent-workspace-single
@@ -57,6 +57,13 @@ metadata:
 - Fresh 子 Agent 默认零上下文，任务卡必须带 evidence（已确认/待验证/不要重读）；
 - 规则与模板见 `references/exploration.md`、`templates/exploration-evidence.md.tpl`。
 
+## 任务预检与开工自检
+
+- BA 下派前判断任务大小：模块/文件/AC/依赖/切片/预算；太大就拆，不把整个功能交给一个子 Agent；
+- 子 Agent 只做开工自检：evidence 对 HEAD、入口存在、测试命令可执行；
+- 自检失败返回 `EVIDENCE_STALE` / `TASK_TOO_BIG` / `MISSING_ENTRY`，不自己重新拆任务；
+- 第一次 compaction 就停，不要连续压缩；规则见 `references/task-sizing.md`。
+
 ## 换班（handoff / resume）
 
 常驻 BA / Planner 换班不要新建 `agent_id`：
@@ -86,6 +93,7 @@ MQTT 库已 vendor 到 `vendor/paho/`（paho-mqtt 2.2.0），不需要安装依�
 - `references/session-budget.md`
 - `references/handoff.md`
 - `references/exploration.md`
+- `references/task-sizing.md`
 - `references/layout.md`
 - `references/omp.md`
 - `references/dsh.md`

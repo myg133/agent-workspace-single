@@ -83,6 +83,14 @@
 - QA 验证 diff/AC，不重新探索架构；
 - 规则与模板见 [exploration.md](exploration.md)。
 
+## 4.4 任务预检与开工自检
+
+- BA 下派前判断模块/文件/AC/依赖/预算；太大就拆；
+- 子 Agent 只做开工自检：evidence 对 HEAD、入口存在、测试命令可执行；
+- 自检失败返回 EVIDENCE_STALE / TASK_TOO_BIG / MISSING_ENTRY，不自己重新拆；
+- 第一次 compaction 就停，不要连续压缩；
+- 规则见 [task-sizing.md](task-sizing.md)。
+
 ## 5. 返工
 
 - BA 在 docs 的 `status.md` 写 `return_reason`；

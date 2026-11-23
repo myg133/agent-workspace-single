@@ -89,4 +89,5 @@ REQ-001 开发完成
 - 任务预检 vs 开工自检见 [task-sizing.md](../task-sizing.md)。
 - 单会话默认 ≤60 轮 / 8 万上下文；到阈值写 handoff 并退出，不要开一整天。
 - 只读任务卡列出的文件；不要开头就扫全仓库。
-- 会话与子 Agent 预算见 [session-budget.md](../session-budget.md)。
+- 会话与子 Agent 预算见 [session-budget.md](../session-budget.md)；
+- 临时文件/导出只写当前 worktree 或 `<local-root>/.aw/{tmp,exports}/`；禁止写 `C:/tmp`、`D:/tmp`、`%TEMP%`、Desktop、Downloads。

@@ -3,7 +3,7 @@ name: agent-workspace-single
 description: 单机、双仓（代码仓库 + 文档仓库）、传统分支模型下的轻量多 Agent 协作层。用于已有项目不想改造成 workspace 布局，但需要 WIP=1、feature worktree 隔离、认领和交接的场景。单机消息、本地 inbox、可选 MQTT 已支持；不适用于需要 workspace 分支模型的场景。
 metadata:
   short-description: 单机双仓 Agent 协作
-  version: 0.6.1
+  version: 0.6.2
 ---
 
 # agent-workspace-single
@@ -63,6 +63,18 @@ metadata:
 - 子 Agent 只做开工自检：evidence 对 HEAD、入口存在、测试命令可执行；
 - 自检失败返回 `EVIDENCE_STALE` / `TASK_TOO_BIG` / `MISSING_ENTRY`，不自己重新拆任务；
 - 第一次 compaction 就停，不要连续压缩；规则见 `references/task-sizing.md`。
+
+## 写入目录限定
+
+所有写文件必须落在 `<local-root>` 或当前 worktree 内。
+
+- 临时文件：`<local-root>/.aw/tmp/`
+- 导出 / 截图 / 日志：`<local-root>/.aw/exports/<REQ>/`
+- 随需求提交的证据：`<docs_root>/demands/<REQ>/evidence/`（BA 写）
+- 禁止：盘根、`C:/tmp`、`D:/tmp`、`%TEMP%`、Desktop、Downloads、`..` 逃逸
+- 工具必须用系统临时目录时：改 `TMP/TEMP/TMPDIR` 到 `.aw/tmp`，或复制回项目内并清理
+
+详见 `references/layout.md`。
 
 ## 换班（handoff / resume）
 

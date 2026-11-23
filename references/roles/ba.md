@@ -122,4 +122,5 @@ QA 不提交、不改状态。
 - 不把 Pin 写进 docs 之外的临时文件；
 - 不让两个 Dev 同时写一个 worktree；
 - 不手动改 `.aw/claims/`；
-- 外部可见动作（push/merge/发布）按用户授权执行。
+- 外部可见动作（push/merge/发布）按用户授权执行；
+- 导出/截图/日志写 `<local-root>/.aw/exports/<REQ>/`；临时文件写 `.aw/tmp/`；禁止写盘根、`%TEMP%`、Desktop、Downloads。

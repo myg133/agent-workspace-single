@@ -60,3 +60,32 @@ docs/
 ```
 
 Dev/QA 只读；BA 写。
+
+## 5. 写入边界与导出目录（硬规则）
+
+所有写文件必须落在 `<local-root>` 或当前 worktree 内。
+
+| 用途 | 默认路径 |
+|------|----------|
+| 临时文件 / 缓存 | `<local-root>/.aw/tmp/` |
+| 导出 / 截图 / 日志 | `<local-root>/.aw/exports/<REQ>/` |
+| 随需求提交的证据 | `<docs_root>/demands/<REQ>/evidence/`（BA 写） |
+| 代码 | 当前 worktree |
+
+禁止：
+
+- `C:/`、`D:/` 盘根，`C:/tmp`、`D:/tmp`；
+- `%TEMP%`、`%USERPROFILE%`、Desktop、Downloads、`~/tmp`；
+- 用 `..` 逃出 `<local-root>` / 当前 worktree；
+- 把本机绝对路径写进提交、消息或报告。
+
+工具必须使用系统临时目录时：
+
+~~~text
+1. 优先把 TMP / TEMP / TMPDIR 指到 <local-root>/.aw/tmp；
+2. 改不了就在项目内 cwd 运行，把输出复制回 .aw/exports/<REQ>/；
+3. 外部临时文件用完删除，不要留在 C:/ 或 D:/。
+~~~
+
+写前自检：解析目标绝对路径 → 确认前缀是允许根 → 再写。
+不通过就停，不要“先写再挪”。

@@ -442,6 +442,59 @@ def _claim_take(root: Path, cfg: dict, ident: dict, req: str) -> int:
     return 0
 
 
+def _claim_adopt(root: Path, cfg: dict, ident: dict, req: str, branch: str = "") -> int:
+    req = req.strip().upper()
+    if not REQ_RE.match(req):
+        raise ToolError(REQ_FORMAT_HINT, 2)
+    branch = (branch or ("%s%s" % (cfg["branch_prefix"], req))).strip()
+    code = Path(cfg["code_root"])
+    worktree = Path(cfg["worktree_root"]) / req
+    with FileLock(root / STATE_DIR / "locks" / "claims.lock"):
+        claims = _claims(root)
+        mine = _holding(claims, ident["agent_id"])
+        if mine:
+            print("ALREADY_HOLDING %s" % mine["req"])
+            return 3
+        existing = next((c for c in claims
+                         if c.get("req") == req and c.get("state") == "active"), None)
+        if existing:
+            print("TAKEN_BY %s" % existing.get("agent_id", "?"))
+            return 3
+        if git("show-ref", "--verify", "--quiet", "refs/heads/%s" % branch,
+               cwd=code, check=False).returncode != 0:
+            print("BRANCH_NOT_FOUND %s" % branch)
+            return 3
+        if worktree.exists():
+            actual = git("rev-parse", "--abbrev-ref", "HEAD", cwd=worktree, check=False).stdout.strip()
+            if actual != branch:
+                print("WORKTREE_BRANCH_MISMATCH %s: claim=%s actual=%s" % (req, branch, actual))
+                return 3
+        else:
+            worktree.parent.mkdir(parents=True, exist_ok=True)
+            proc = git("worktree", "add", str(worktree), branch, cwd=code, check=False, timeout=120)
+            if proc.returncode != 0:
+                detail = (proc.stderr or proc.stdout or "").strip()
+                raise ToolError("ADOPT_FAILED 创建 worktree 失败: %s" % detail, 1)
+        claim = {
+            "req": req,
+            "title": next((q.get("title", "") for q in _queue(root) if q.get("req") == req), ""),
+            "agent_id": ident["agent_id"],
+            "session_id": ident["session_id"],
+            "session_source": ident["session_source"],
+            "branch": branch,
+            "worktree": str(worktree),
+            "base_branch": cfg["base_branch"],
+            "base_sha": _resolve_base(cfg),
+            "state": "active",
+            "adopted": True,
+            "claimed_at": _now(),
+        }
+        write_json(_claim_path(root, req), claim)
+        _save_queue(root, [q for q in _queue(root) if q.get("req") != req])
+    print("ADOPTED %s %s" % (req, branch))
+    return 0
+
+
 def _claim_release(root: Path, cfg: dict, ident: dict, req: str,
                    force: bool = False, remove_worktree: bool = False) -> int:
     req = req.strip().upper()
@@ -1001,6 +1054,10 @@ def cmd_claim(args) -> int:
         if not args.req:
             raise ToolError("用法: claim take REQ-001", 2)
         return _claim_take(root, cfg, ident, args.req)
+    if action == "adopt":
+        if not args.req:
+            raise ToolError("用法: claim adopt REQ-001 [--branch feature/REQ-001]", 2)
+        return _claim_adopt(root, cfg, ident, args.req, branch=args.branch)
     if action == "release":
         if not args.req:
             raise ToolError("用法: claim release REQ-001", 2)
@@ -1831,8 +1888,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_q.set_defaults(func=cmd_queue)
 
     p_c = sub.add_parser("claim")
-    p_c.add_argument("action", choices=["next", "take", "release", "list", "doctor"])
+    p_c.add_argument("action", choices=["next", "take", "release", "adopt", "list", "doctor"])
     p_c.add_argument("req", nargs="?", default="")
+    p_c.add_argument("--branch", default="")
     p_c.add_argument("--force", action="store_true")
     p_c.add_argument("--remove-worktree", action="store_true")
     p_c.set_defaults(func=cmd_claim)

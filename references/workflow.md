@@ -28,6 +28,34 @@
 4. `aw_single.py claim next`；
 5. 把 worktree 路径、docs 路径、base sha 交给 Dev。
 
+## 2.1 异常：分支/worktree 被占用
+
+如果子 Agent 先认领了，claim 仍属于它：
+
+~~~bash
+# 优先让子 Agent 自己释放
+$env:AW_AGENT_ID='<子 agent id>'
+python scripts/aw_single.py claim release REQ-001
+
+# 或者 BA 强制释放（只释放 claim，不删 worktree）
+$env:AW_AGENT_ID='ba-1'
+python scripts/aw_single.py claim release REQ-001 --force
+~~~
+
+如果 claim 已经不在了，但分支/worktree 还在（孤儿 worktree），不要先删：
+
+~~~bash
+python scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
+~~~
+
+`claim adopt` 会：
+
+- 保留 worktree 里的未提交改动；
+- 把 claim 转给当前 BA；
+- 把队列里的 REQ 移除；
+- 不重建分支，不丢现场。
+
+之后正常让 Dev 在该 worktree 继续，QA 验证，BA 合并/回收。
 ## 3. Dev
 
 1. 只读 docs；

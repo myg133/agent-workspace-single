@@ -70,6 +70,8 @@ python scripts/aw_single.py queue add REQ-001 --title "登录"
 python scripts/aw_single.py claim next
 python scripts/aw_single.py claim list
 python scripts/aw_single.py claim release REQ-001
+# 已有分支/worktree 被孤儿认领占用：保留现场，转给当前 BA
+python scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
 python scripts/aw_single.py claim doctor
 python scripts/aw_single.py project check
 python scripts/aw_single.py bus log

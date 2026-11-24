@@ -3,7 +3,7 @@ name: agent-workspace-single
 description: 单机、双仓（代码仓库 + 文档仓库）、传统分支模型下的轻量多 Agent 协作层。用于已有项目不想改造成 workspace 布局，但需要 WIP=1、feature worktree 隔离、认领和交接的场景。单机消息、本地 inbox、可选 MQTT 已支持；不适用于需要 workspace 分支模型的场景。
 metadata:
   short-description: 单机双仓 Agent 协作
-  version: 0.6.3
+  version: 0.6.4
 ---
 
 # agent-workspace-single
@@ -136,6 +136,8 @@ python scripts/aw_single.py claim next
 python scripts/aw_single.py claim list
 python scripts/aw_single.py claim release REQ-001
 python scripts/aw_single.py claim doctor
+# 已有分支/worktree 被孤儿认领占用时，保留现场并转给当前 BA
+python scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
 
 python scripts/aw_single.py msg send --to ba-1 --type question --body "ping"
 python scripts/aw_single.py msg inbox

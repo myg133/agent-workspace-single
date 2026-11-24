@@ -162,6 +162,24 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0]["body"], "handoff-test")
 
+    def test_claim_adopt_existing_branch_worktree(self):
+        run(["queue", "add", "REQ-001"], self.tmp, self.env)
+        branch = "feature/REQ-001"
+        git(["branch", branch], self.code)
+        worktree = self.tmp / "worktrees" / "REQ-001"
+        worktree.parent.mkdir(parents=True, exist_ok=True)
+        out = git(["worktree", "add", str(worktree), branch], self.code)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        (worktree / "wip.txt").write_text("wip\n", encoding="utf-8")
+        adopted = run(["claim", "adopt", "REQ-001"], self.tmp, self.env)
+        self.assertEqual(adopted.returncode, 0, adopted.stderr)
+        self.assertIn("ADOPTED REQ-001", adopted.stdout)
+        claim = json.loads((self.tmp / ".aw" / "claims" / "REQ-001.json").read_text(encoding="utf-8"))
+        self.assertEqual(claim["agent_id"], "ba-1")
+        self.assertEqual(claim["branch"], branch)
+        self.assertEqual(claim["worktree"], str(worktree))
+        self.assertTrue(claim.get("adopted"))
+
     def test_subagent_blocks_messages_watch_claim(self):
         env = dict(self.env)
         env["AW_SUBAGENT"] = "1"

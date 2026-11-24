@@ -3,7 +3,7 @@ name: agent-workspace-single
 description: 单机、双仓（代码仓库 + 文档仓库）、传统分支模型下的轻量多 Agent 协作层。用于已有项目不想改造成 workspace 布局，但需要 WIP=1、feature worktree 隔离、认领和交接的场景。单机消息、本地 inbox、可选 MQTT 已支持；不适用于需要 workspace 分支模型的场景。
 metadata:
   short-description: 单机双仓 Agent 协作
-  version: 0.6.2
+  version: 0.6.3
 ---
 
 # agent-workspace-single
@@ -75,6 +75,21 @@ metadata:
 - 工具必须用系统临时目录时：改 `TMP/TEMP/TMPDIR` 到 `.aw/tmp`，或复制回项目内并清理
 
 详见 `references/layout.md`。
+
+## 子 Agent 不接消息
+
+spawn 子 Agent 时设置：
+
+~~~text
+AW_SUBAGENT=1
+AW_NO_MSG=1
+AW_ROLE=dev      # 或 qa / explore
+AW_SESSION_ID=<子会话 id>
+~~~
+
+- `aw_single.py msg / watch / claim / whoami / handoff / resume / bus / queue` 对子 Agent 直接拒绝，返回 `SUBAGENT_NO_*`；
+- OMP `aw-single-wake` 只允许 authoritative session：当前 `AW_SESSION_ID` / `PI_SESSION_ID` 必须等于 `.aw/sessions/<agent>.map.json` 的 `session_id`；
+- 子 Agent 的结果交回父 BA，不走 bus。详见 `references/omp.md`。
 
 ## 换班（handoff / resume）
 

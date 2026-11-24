@@ -60,8 +60,8 @@ watcher 写 `.aw/wake/ba-1.json`，插件读取后 steer。
 Windows 下 watcher 使用 `CREATE_NO_WINDOW` + `STARTF_USESHOWWINDOW`，
 git 子进程不会反复弹控制台窗口。
 
-插件加载时还会写 `.aw/sessions/<agent>.json`（pid / pid_started_at / session），
-并每 30 秒刷新 `last_seen`。watcher 用这个文件判断本机 agent 是否在线。
+插件加载时写 `.aw/sessions/<agent>.json`（pid / pid_started_at / session），
+并每 30 秒刷新 `last_seen`；`aw_single.py whoami` 也会刷新。watcher 用这个文件判断本机 agent 是否在线。
 
 ## 4. Presence
 
@@ -82,35 +82,36 @@ aw_single.py presence --json
 
 ## 5. 子 agent 与唤醒所有权
 
-一个 agent 只能有一个主进程持有唤醒权。
+一个 agent 只能有一个 **authoritative session** 收消息。
 
-插件加载时会读 `.aw/sessions/<agent>.json`：
+插件加载时会读：
 
-- 如果里面的 `pid` 还活着，且不是当前进程 → 判定自己是子进程/重复会话；
-- 直接关闭唤醒，日志写：
-  `wake-disabled not-owner agent=ba-2 owner=<pid> me=<pid>`；
-- 不会覆盖父会话的 session。
+~~~text
+<local-root>/.aw/sessions/<agent>.map.json
+~~~
 
-因此 BA spawn 的 QA/Dev 即使继承了 `AW_AGENT_ID=ba-2`，也不会再收到发给 ba-2 的 wake。
+判定：
 
-更稳妥的做法是 spawn 时设置：
+- 当前 `AW_SESSION_ID`（或 OMP 的 `PI_SESSION_ID`）必须等于 map 的 `session_id`；
+- map 的 `session_authoritative` 必须为 `true`；
+- 不一致 → 直接关闭唤醒，日志写 `disabled session-mismatch`。
 
-```text
-AW_WAKE_DISABLE=1
-```
+另外，spawn 子 Agent 时设置：
 
-或者给子 agent 独立身份：
+~~~text
+AW_SUBAGENT=1
+AW_NO_MSG=1
+AW_ROLE=dev      # 或 qa / explore
+AW_SESSION_ID=<子会话 id>
+~~~
 
-```text
-AW_AGENT_ID=ba-2-qa
-AW_ROLE=qa
-```
+插件看到 `AW_SUBAGENT=1` / `AW_NO_MSG=1`，或 role 不是 `ba` / `planner`，会直接禁用。
 
 ## 6. 不要重复唤醒
 
 - 用插件时，不要再给 `watch` 加 `--exec`；
 - 同一 agent 只装一个 wake 插件；
-- 多个 omp 会话共用一个 agent_id 时，插件会各自唤醒，建议一个 agent 一个会话。
+- 多个 omp 会话共用一个 agent_id 时，只有 map 里的 authoritative session 会唤醒，其余会话自动禁用。
 
 ## 6. 日志
 

@@ -8,6 +8,9 @@ import { dirname, join, resolve } from 'node:path'
 const POLL_MS = 2000
 const MIN_INTERVAL_MS = 10000
 const MAX_PARENT_LOOKUP = 8
+const SESSION = String(process.env.AW_SESSION_ID || process.env.PI_SESSION_ID || process.env.DSH_SESSION_ID || '').trim()
+const ROLE = String(process.env.AW_ROLE || '').trim().toLowerCase()
+const SUBAGENT = /^(1|true|yes|on)$/i.test(String(process.env.AW_SUBAGENT || process.env.AW_NO_MSG || ''))
 
 const LOG = process.env.AW_OMP_WAKE_LOG || join(homedir(), '.omp', 'logs', 'aw-single-wake.log')
 try { mkdirSync(dirname(LOG), { recursive: true }) } catch {}
@@ -36,9 +39,17 @@ function findRoot() {
 export default function (pi) {
   const agent = String(process.env.AW_AGENT_ID || '').trim()
   const root = findRoot()
-  if (!agent || !root) {
-    note('disabled agent=' + (agent || '-') + ' root=' + (root || '-'))
+  const canReceive = !SUBAGENT && (!ROLE || ROLE === 'ba' || ROLE === 'planner')
+  if (!agent || !root || !canReceive) {
+    note('disabled agent=' + (agent || '-') + ' root=' + (root || '-') + ' session=' + (SESSION || '-') + ' role=' + (ROLE || '-') + ' sub=' + SUBAGENT)
     return
+  }
+  if (SESSION) {
+    const map = readJson(join(root, '.aw', 'sessions', agent + '.map.json'))
+    if (map && map.session_authoritative === true && map.session_id && String(map.session_id) !== SESSION) {
+      note('disabled session-mismatch agent=' + agent + ' session=' + SESSION + ' map=' + map.session_id)
+      return
+    }
   }
   const wakePath = join(root, '.aw', 'wake', agent + '.json')
   const seenPath = join(root, '.aw', 'omp-wake-seen', agent + '.json')

@@ -33,6 +33,19 @@ class ToolError(RuntimeError):
         self.code = code
 
 
+def _is_subagent() -> bool:
+    value = (os.environ.get("AW_SUBAGENT") or os.environ.get("AW_NO_MSG") or "").strip().lower()
+    return value in ("1", "true", "yes", "on")
+
+
+def _reject_subagent(action: str) -> None:
+    if _is_subagent():
+        raise ToolError(
+            "SUBAGENT_NO_%s: 子 Agent 不接消息、不 watch、不 claim；"
+            "只执行任务卡，结果交回父会话" % action.upper(), 3
+        )
+
+
 def _now() -> str:
     return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -860,6 +873,7 @@ def _reset_wake_seen_to_read(root: Path, agent: str) -> None:
 
 
 def cmd_handoff(args) -> int:
+    _reject_subagent("handoff")
     root, _cfg = load_config(args)
     ident = _identity(args)
     _record_session(root, ident)
@@ -893,6 +907,7 @@ def cmd_handoff(args) -> int:
 
 
 def cmd_resume(args) -> int:
+    _reject_subagent("resume")
     root, _cfg = load_config(args)
     ident = _identity(args)
     _record_session(root, ident)
@@ -931,6 +946,7 @@ def cmd_resume(args) -> int:
 
 
 def cmd_whoami(args) -> int:
+    _reject_subagent("whoami")
     root, _cfg = load_config(args)
     ident = _identity(args)
     _record_session(root, ident)
@@ -942,6 +958,7 @@ def cmd_whoami(args) -> int:
 
 
 def cmd_queue(args) -> int:
+    _reject_subagent("queue")
     root, _cfg = load_config(args)
     action = args.action
     if action == "add":
@@ -969,6 +986,7 @@ def cmd_queue(args) -> int:
 
 
 def cmd_claim(args) -> int:
+    _reject_subagent("claim")
     root, cfg = load_config(args)
     action = args.action
     if action == "list":
@@ -1190,6 +1208,7 @@ def _bus_import(root: Path, cfg: dict) -> int:
 
 
 def cmd_bus(args) -> int:
+    _reject_subagent("bus")
     root, cfg = load_config(args)
     if args.action == "log":
         messages = _bus_messages(root, cfg)
@@ -1365,6 +1384,7 @@ def _send_local(root: Path, ident: dict, to: list[str], kind: str, body: str,
 
 
 def cmd_msg(args) -> int:
+    _reject_subagent("msg")
     root, cfg = load_config(args)
     ident = _identity(args)
     _record_session(root, ident)
@@ -1621,6 +1641,7 @@ def _run_watch_once(root: Path, args, seed_read: bool = False) -> int:
 
 
 def cmd_watch(args) -> int:
+    _reject_subagent("watch")
     root, cfg = load_config(args)
     if args.status:
         return _watch_status(root)

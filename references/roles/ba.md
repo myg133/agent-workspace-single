@@ -82,6 +82,7 @@ base：develop@<sha>
 Evidence：按 templates/exploration-evidence.md.tpl 附已确认/待验证/不要重读
 BA 预检：切片目标 / 预期文件 / 预期 diff / AC 子集 / 预算
 子 Agent：最多 2 个；没有 diff 预期的任务不 spawn；超过切片预算就拆
+子 Agent 环境：AW_SUBAGENT=1 / AW_NO_MSG=1 / AW_ROLE=dev|qa|explore；结果回父会话，不走 bus
 换班：handoff 记录未处理消息；新会话同一 AW_AGENT_ID，resume
 约束：只改 worktree；不改 docs/status/claim；handoff 后退出
 ```

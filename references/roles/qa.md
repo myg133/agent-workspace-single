@@ -83,3 +83,4 @@ Post-merge 可后续加；首版不强制。
 - 验证会话默认 ≤30 轮 / 6 万上下文；只读 diff、AC、关键文件，不要重扫全仓库。
 - 会话与子 Agent 预算见 [session-budget.md](../session-budget.md)；
 - 临时导出/截图写 `<local-root>/.aw/exports/<REQ>/`；正式报告交 BA 落到 `demands/<REQ>/`；禁止写盘根、`%TEMP%`。
+- 子 Agent 不接消息：不运行 `msg` / `watch` / `claim`；工具会返回 `SUBAGENT_NO_*`，结果交回父 BA。

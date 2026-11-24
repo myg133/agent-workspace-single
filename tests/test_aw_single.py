@@ -162,6 +162,15 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0]["body"], "handoff-test")
 
+    def test_subagent_blocks_messages_watch_claim(self):
+        env = dict(self.env)
+        env["AW_SUBAGENT"] = "1"
+        for args in (["msg", "inbox"], ["watch", "--status"],
+                     ["claim", "next"], ["whoami"]):
+            out = run(args, self.tmp, env)
+            self.assertNotEqual(out.returncode, 0, args)
+            self.assertIn("SUBAGENT_NO_", out.stderr, args)
+
     def test_handoff_keeps_claim(self):
         self.assertEqual(run(["queue", "add", "REQ-001", "--title", "x"],
                              self.tmp, self.env).returncode, 0)

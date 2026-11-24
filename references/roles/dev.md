@@ -91,3 +91,4 @@ REQ-001 开发完成
 - 只读任务卡列出的文件；不要开头就扫全仓库。
 - 会话与子 Agent 预算见 [session-budget.md](../session-budget.md)；
 - 临时文件/导出只写当前 worktree 或 `<local-root>/.aw/{tmp,exports}/`；禁止写 `C:/tmp`、`D:/tmp`、`%TEMP%`、Desktop、Downloads。
+- 子 Agent 不接消息：不运行 `msg` / `watch` / `claim`；工具会返回 `SUBAGENT_NO_*`，结果交回父 BA。

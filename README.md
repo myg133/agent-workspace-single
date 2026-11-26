@@ -1,6 +1,6 @@
 # agent-workspace-single
 
-> **合并状态（2026-11-26）**：single 模式已并入 `agent-workspace` 2.1.0；
+> **合并状态（2026-11-26）**：single 模式已并入 `agent-workspace` 2.2.0；
 > 本仓库保留兼容与历史，新安装优先使用主 skill 的 single 模式（`scripts/aw_single.py`）。
 
 单机版的轻量 Agent 协作层：**传统代码仓库 + 独立文档仓库 + 本地 `.aw/`**。

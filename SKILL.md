@@ -8,7 +8,7 @@ metadata:
 
 # agent-workspace-single
 
-> **合并状态（2026-11-26）**：本 skill 已并入 `agent-workspace` 2.1.0 的 single 模式；
+> **合并状态（2026-11-26）**：本 skill 已并入 `agent-workspace` 2.2.0 的 single 模式；
 > 本仓库保留兼容入口，新安装优先使用主 skill。
 
 这是 `agent-workspace` 的单机精简版，只解决三件事：

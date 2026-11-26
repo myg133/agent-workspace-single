@@ -14,14 +14,14 @@ metadata:
 2. 每个需求一个独立 feature worktree；
 3. 需求文档在另一个仓库时，仍能完成认领、交接和状态追踪。
 
-它**不改造**代码仓库，也不使用 `demand` / `bus` / `deploy` 分支。
+它**不改造**代码仓库，也不建 `demand` / `deploy` 分支；消息走本地 inbox，可选 bus 审计 / MQTT。
 
 ## 何时使用
 
 - 已有传统 `main/develop/feature/*` 仓库；
 - 文档在独立仓库；
 - 单机多 agent（BA/Dev/QA）；
-- 不想引入 workspace orphan 根和 bus 分支。
+- 不想引入 workspace orphan 根；bus 审计可选。
 
 ## 何时不用
 

@@ -38,6 +38,15 @@ BA 只做**业务探索**：需求、验收、文档、接口、依赖、风险�
 
 ## 2. 启动
 
+启动时设置 `AW_ROLE=ba`，让 presence 能识别角色：
+
+~~~powershell
+$env:AW_AGENT_ID = "ba-1"
+$env:AW_ROLE = "ba"
+python scripts/aw_single.py whoami
+~~~
+
+
 1. 确认 `.aw/config.json` 指向正确的 `code_root` / `docs_root`；
 2. `aw_single.py whoami`；
 3. `aw_single.py claim list`；

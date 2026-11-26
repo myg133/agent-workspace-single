@@ -24,6 +24,17 @@ aw_single.py resume
 
 完整预算见 [session-budget.md](../session-budget.md)，换班协议见 [handoff.md](../handoff.md)。
 
+## 0.1 启动
+
+~~~powershell
+$env:AW_AGENT_ID = "planner-1"
+$env:AW_ROLE = "planner"
+python scripts/aw_single.py whoami
+~~~
+
+`AW_ROLE=planner` 会写入 session / presence，`msg report` 才能识别 Planner；
+不设 role 时会被当成普通 agent。
+
 ## 1. 何时启用
 
 小项目、单 BA 时，**BA 可以兼规划**，不需要 Planner。

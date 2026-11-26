@@ -2,7 +2,7 @@
 
 单机版的轻量 Agent 协作层：**传统代码仓库 + 独立文档仓库 + 本地 `.aw/`**。
 
-它不要求把现有项目改造成 workspace 布局，也不创建 `demand` / `bus` / `deploy` 孤立分支。
+它不要求把现有项目改造成 workspace 布局，也不创建 `demand` / `deploy` 分支；消息用本地 inbox，可选 bus 审计 / MQTT。
 
 - 代码仓库保持原样（通常 `main` / `develop` / `feature/*`）；
 - 需求、验收、状态继续放在现有文档仓库；
@@ -77,6 +77,7 @@ python scripts/aw_single.py project check
 python scripts/aw_single.py bus log
 
 python scripts/aw_single.py msg send --to ba-1 --type question --body "ping"
+python scripts/aw_single.py msg report --subject "用户新任务" --body "REQ-001：目标 / 优先级 / 预期"
 python scripts/aw_single.py msg inbox
 python scripts/aw_single.py msg wait --timeout 120
 python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
@@ -121,7 +122,7 @@ python scripts/aw_single.py watch --ensure --exec "bash start-agent.sh"
 ## 不做什么
 
 - 不改代码仓库的分支模型；
-- 不建 `demand` / `bus` / `deploy` 分支；
+- 不建 `demand` / `deploy` 分支；bus 是可选审计分支；
 - 不做跨机 claim；
 - 不做完整 audit / verify / upgrade；
 - 不替代现有 CI/CD 和消息系统；

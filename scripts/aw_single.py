@@ -766,6 +766,17 @@ def cmd_project(args) -> int:
         return 0
     raise ToolError("未知 project 操作: %s" % action, 2)
 
+def _active_presence(root: Path) -> list[dict]:
+    _update_presence(root)
+    folder = root / STATE_DIR / "presence"
+    rows = []
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        data = read_json(path, None)
+        if isinstance(data, dict) and data.get("status") == "online":
+            rows.append(data)
+    return rows
+
+
 def cmd_presence(args) -> int:
     root, _cfg = load_config(args)
     _update_presence(root)
@@ -1445,6 +1456,16 @@ def cmd_msg(args) -> int:
     root, cfg = load_config(args)
     ident = _identity(args)
     _record_session(root, ident)
+    if args.action == "report":
+        rows = _active_presence(root)
+        planners = [str(r["agent"]) for r in rows
+                    if str(r.get("role") or "") == "planner" and str(r.get("agent")) != ident["agent_id"]]
+        targets = planners or [str(r["agent"]) for r in rows
+                               if str(r.get("agent")) != ident["agent_id"]]
+        if not targets:
+            raise ToolError("NO_ACTIVE_AGENTS: 没有可报备的 Planner 或 active agent", 3)
+        args.to = ",".join(targets)
+        args.action = "send"
     if args.action == "send":
         to = [x.strip() for x in (args.to or "").split(",") if x.strip()]
         if not to:
@@ -1896,7 +1917,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_c.set_defaults(func=cmd_claim)
 
     p_m = sub.add_parser("msg", help="本地消息")
-    p_m.add_argument("action", choices=["send", "inbox", "ack", "wait"])
+    p_m.add_argument("action", choices=["send", "report", "inbox", "ack", "wait"])
     p_m.add_argument("id", nargs="?", default="")
     p_m.add_argument("--to", default="")
     p_m.add_argument("--type", default="fyi")

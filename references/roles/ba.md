@@ -120,6 +120,7 @@ QA 不提交、不改状态。
 ## 8. 硬规则
 
 - 不自己实现、不自己测试；
+- 用户直接指派任务后，先 `msg report`：有 online Planner 发 Planner，否则广播；再 claim / 实现。
 - 不把 Pin 写进 docs 之外的临时文件；
 - 不让两个 Dev 同时写一个 worktree；
 - 不手动改 `.aw/claims/`；

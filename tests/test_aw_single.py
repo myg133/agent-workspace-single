@@ -316,6 +316,32 @@ class SingleCase(unittest.TestCase):
         branch = git(["show-ref", "--verify", "refs/heads/bus"], self.code)
         self.assertEqual(branch.returncode, 0)
 
+    def test_msg_report_prefers_planner_then_broadcasts(self):
+        presence = self.tmp / ".aw" / "presence"
+        presence.mkdir(parents=True, exist_ok=True)
+
+        def put(agent, role):
+            (presence / (agent + ".json")).write_text(json.dumps({
+                "agent": agent, "role": role, "status": "online",
+                "session": "s-" + agent, "pid": os.getpid(),
+            }), encoding="utf-8")
+
+        put("ba-1", "ba")
+        put("planner-1", "planner")
+        put("ba-2", "ba")
+        out = run(["msg", "report", "--subject", "new task", "--body", "REQ-001"], self.tmp, self.env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        planner_inbox = list((self.tmp / ".aw" / "inbox" / "planner-1").glob("*.json"))
+        ba2_inbox = list((self.tmp / ".aw" / "inbox" / "ba-2").glob("*.json"))
+        self.assertEqual(len(planner_inbox), 1)
+        self.assertEqual(len(ba2_inbox), 0)
+
+        (presence / "planner-1.json").unlink()
+        out = run(["msg", "report", "--subject", "new task", "--body", "REQ-002"], self.tmp, self.env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        ba2_inbox = list((self.tmp / ".aw" / "inbox" / "ba-2").glob("*.json"))
+        self.assertGreaterEqual(len(ba2_inbox), 1)
+
     def test_msg_wait_timeout(self):
         out = run(["msg", "wait", "--timeout", "1"], self.tmp, self.env)
         self.assertEqual(out.returncode, 3)

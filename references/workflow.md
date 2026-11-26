@@ -28,6 +28,23 @@
 4. `aw_single.py claim next`；
 5. 把 worktree 路径、docs 路径、base sha 交给 Dev。
 
+## 2.0 接用户任务先报备
+
+用户直接把任务交给 BA 时，BA 先报备，再 claim / 实现。
+
+~~~bash
+python scripts/aw_single.py msg report \
+  --subject "用户新任务：REQ-001" \
+  --body "来源：用户直接指派；目标：...；优先级：...；预期：..."
+~~~
+
+行为：
+
+- 有 online Planner → 只发 Planner；
+- 没有 online Planner → 广播给所有 online agent（排除自己）；
+- 默认 type=fyi、expect=none；
+- 报备不是 claim 的前置门禁，但必须先留下记录。
+
 ## 2.1 异常：分支/worktree 被占用
 
 如果子 Agent 先认领了，claim 仍属于它：

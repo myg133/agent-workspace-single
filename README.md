@@ -1,5 +1,8 @@
 # agent-workspace-single
 
+> **合并状态（2026-11-26）**：single 模式已并入 `agent-workspace` 2.0.0；
+> 本仓库保留兼容与历史，新安装优先使用主 skill 的 single 模式（`scripts/aw_single.py`）。
+
 单机版的轻量 Agent 协作层：**传统代码仓库 + 独立文档仓库 + 本地 `.aw/`**。
 
 它不要求把现有项目改造成 workspace 布局，也不创建 `demand` / `deploy` 分支；消息用本地 inbox，可选 bus 审计 / MQTT。
